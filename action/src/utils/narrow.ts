@@ -30,6 +30,17 @@ export const requireString = (
   }
 };
 
+export const requireBoolean = (
+  parent: Record<string, unknown>,
+  key: string,
+  path: string,
+  errors: ParseError[],
+): void => {
+  if (typeof parent[key] !== 'boolean') {
+    errors.push({ path, reason: missingOr(parent[key], 'a boolean') });
+  }
+};
+
 export const requireNumber = (
   parent: Record<string, unknown>,
   key: string,

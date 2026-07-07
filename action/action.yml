@@ -1,0 +1,62 @@
+# The Amends GitHub Action (Phase 1).
+#
+# Stage naming: `fix`, `verify`, and `publish` are sub-stages of the product
+# PRD's FIX stage (§3.3); `compile` and `reconcile` join this input in later
+# build-order steps.
+#
+# No default secrets: this action declares no secret inputs and reads
+# GITHUB_TOKEN from the job env only in the publish stage. Model secrets are
+# provided by the workflow to the fix job alone; the verify stage runs
+# agent-authored tests under an explicit zero-secret env allowlist (§8.1).
+#
+# Packaging note: dist/index.js is the tsc build output; dependency bundling
+# for marketplace distribution is follow-up work.
+name: 'Amends'
+description: >-
+  Turns a runtime-incident case file into an evidence-backed fix pull request:
+  agent fix pass, counterfactual verification, gated publish.
+inputs:
+  stage:
+    description: "Pipeline sub-stage to run: 'fix', 'verify', or 'publish'."
+    required: true
+  case-file:
+    description: 'Repo-relative path to the case file (§5.1 case_file JSON).'
+    required: true
+  config-path:
+    description: 'Repo-relative path to amends.yml.'
+    required: false
+    default: 'amends.yml'
+  fix-bundle:
+    description: 'Repo-relative path where the fix stage writes (and later stages read) the fix handoff bundle.'
+    required: false
+    default: 'amends-out/fix-bundle.json'
+  verify-bundle:
+    description: 'Repo-relative path where the verify stage writes (and publish reads) the verdict bundle.'
+    required: false
+    default: 'amends-out/verify-bundle.json'
+  prompt-path:
+    description: 'Repo-relative path where the assembled fix-pass prompt is written for the adapter.'
+    required: false
+    default: 'amends-out/prompt.md'
+  adapter-command:
+    description: 'Agent adapter executable (Layer A, §3.4). Required for stage: fix.'
+    required: false
+  adapter-args:
+    description: 'Whitespace-separated extra arguments for the adapter command.'
+    required: false
+  model:
+    description: 'Model identifier passed to the adapter as model_config.model. Required for stage: fix.'
+    required: false
+  base:
+    description: 'Base branch for the fix pull request.'
+    required: false
+    default: 'main'
+  timeout-ms:
+    description: 'Per-command timeout in milliseconds.'
+    required: false
+    default: '600000'
+runs:
+  # Package engines require Node >= 22; node24 is the nearest GitHub-hosted
+  # Node runtime satisfying that bound.
+  using: 'node24'
+  main: 'dist/index.js'

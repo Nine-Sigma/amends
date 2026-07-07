@@ -21,6 +21,15 @@ export interface CommandRunner {
   run(request: CommandRequest): Promise<CommandResult>;
 }
 
+const MAX_SIGNATURE_OUTPUT = 400;
+
+/** Deterministic short signature of a failed command, comparable across identical runs. */
+export const commandFailureSignature = (result: CommandResult): string => {
+  if (result.kind === 'timed_out') return `timed_out after ${result.timeoutMs}ms`;
+  const output = (result.stderr.trim() || result.stdout.trim()).slice(0, MAX_SIGNATURE_OUTPUT);
+  return `exit ${result.exitCode}: ${output}`;
+};
+
 export const createCommandRunner = (): CommandRunner => ({
   run: (request) =>
     new Promise((resolvePromise, rejectPromise) => {

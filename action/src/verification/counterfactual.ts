@@ -10,6 +10,9 @@ import { join } from 'node:path';
 import type { AmendsConfig } from '../config/types.js';
 import { checkInvariance, VERIFICATION_CONFIG_SET } from '../guardrails/environment-invariance.js';
 import { classifyDiffPaths } from '../guardrails/protected-paths.js';
+import { applyFixDiff } from '../utils/apply-fix-diff.js';
+import type { ApplyFixDiffResult } from '../utils/apply-fix-diff.js';
+import { commandFailureSignature } from '../utils/exec.js';
 import type { CommandResult, CommandRunner } from '../utils/exec.js';
 import type { FileWriter } from '../utils/fs.js';
 import { parseFixDiffPaths } from './diff-paths.js';
@@ -64,11 +67,6 @@ export const buildZeroSecretEnv = (
   }
   return env;
 };
-
-/** Inside .git on purpose: outside the worktree, so checkout/clean never see it. */
-const PATCH_SCRATCH_PATH = '.git/amends-fix.patch';
-
-const MAX_SIGNATURE_OUTPUT = 400;
 
 type Refusal = Extract<CounterfactualVerdict, { kind: 'guardrail_violation' | 'cap_exceeded' }>;
 
@@ -143,12 +141,6 @@ async function writeArtifacts(
   }
 }
 
-const failureSignature = (result: CommandResult): string => {
-  if (result.kind === 'timed_out') return `timed_out after ${result.timeoutMs}ms`;
-  const output = (result.stderr.trim() || result.stdout.trim()).slice(0, MAX_SIGNATURE_OUTPUT);
-  return `exit ${result.exitCode}: ${output}`;
-};
-
 async function executeTestRun(
   request: CounterfactualRequest,
   deps: CounterfactualDeps,
@@ -160,20 +152,7 @@ async function executeTestRun(
     request.testCommand.args,
   );
   if (result.kind === 'completed' && result.exitCode === 0) return { passed: true };
-  return { passed: false, failureSignature: failureSignature(result) };
-}
-
-type ApplyResult = { applied: true } | { applied: false; failureSignature: string };
-
-async function applyFixDiff(
-  request: CounterfactualRequest,
-  deps: CounterfactualDeps,
-): Promise<ApplyResult> {
-  if (request.fixDiff.trim() === '') return { applied: true };
-  await deps.files.write(join(request.repoPath, PATCH_SCRATCH_PATH), request.fixDiff);
-  const result = await runCommand(request, deps, 'git', ['apply', PATCH_SCRATCH_PATH]);
-  if (result.kind === 'completed' && result.exitCode === 0) return { applied: true };
-  return { applied: false, failureSignature: `git apply failed: ${failureSignature(result)}` };
+  return { passed: false, failureSignature: commandFailureSignature(result) };
 }
 
 const buildObservation = (
@@ -197,7 +176,7 @@ const buildObservation = (
 function insufficiencyReasons(
   originalRun: RunOutcome,
   patchedRun: RunOutcome,
-  apply: ApplyResult,
+  apply: ApplyFixDiffResult,
 ): string[] {
   const reasons = ['artifact_failed_on_patched'];
   if (!apply.applied) reasons.push('fix_diff_apply_failed');
@@ -226,7 +205,11 @@ export async function runCounterfactual(
   if (originalRun.passed) return { kind: 'not_counterfactual', originalRun };
 
   await resetToOriginal(request, deps);
-  const apply = await applyFixDiff(request, deps);
+  const apply = await applyFixDiff(
+    { repoPath: request.repoPath, fixDiff: request.fixDiff, env: request.env, timeoutMs: request.timeoutMs },
+    deps.runner,
+    deps.files,
+  );
   let patchedRun: RunOutcome;
   if (apply.applied) {
     await writeArtifacts(request, deps);

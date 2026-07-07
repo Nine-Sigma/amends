@@ -1,0 +1,88 @@
+# Reference workflow for the Amends FIX loop: three jobs with per-job
+# permission boundaries and artifact handoff between stages.
+#
+# SECURITY (product PRD §8.1):
+# - NEVER use `pull_request_target` on untrusted code paths. Amends-authored
+#   PRs must not be able to trigger privileged workflows automatically —
+#   `workflow_dispatch` is the only Phase-1 trigger.
+# - Model secrets reach ONLY the fix job. The verify job runs agent-authored
+#   tests with `permissions: {}` and no secrets; the action additionally
+#   enforces an explicit zero-secret env allowlist in code. Runner-level
+#   network isolation varies by runner and is NOT claimed here — harden the
+#   runner itself if you need a network sandbox.
+# - The publish job holds the only write scopes, and runs no agent-authored
+#   code: it applies the already-validated diff and opens the PR.
+name: amends-fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      case-file:
+        description: 'Repo-relative path to the case file to fix'
+        required: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: amends/action@v0 # pin to a released ref in real use
+        with:
+          stage: fix
+          case-file: ${{ inputs.case-file }}
+          adapter-command: claude-code-adapter
+          model: claude-sonnet-5
+        env:
+          # Model secrets are exposed ONLY to this job.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amends-fix-bundle
+          path: amends-out/fix-bundle.json
+
+  verify:
+    needs: fix
+    runs-on: ubuntu-latest
+    # No token scopes and no secrets: agent-authored tests run here.
+    # (Private repos need `contents: read` for checkout — grant nothing else.)
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: amends-fix-bundle
+          path: amends-out
+      - uses: amends/action@v0
+        with:
+          stage: verify
+          case-file: ${{ inputs.case-file }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amends-verify-bundle
+          path: amends-out/verify-bundle.json
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: amends-fix-bundle
+          path: amends-out
+      - uses: actions/download-artifact@v4
+        with:
+          name: amends-verify-bundle
+          path: amends-out
+      - uses: amends/action@v0
+        with:
+          stage: publish
+          case-file: ${{ inputs.case-file }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

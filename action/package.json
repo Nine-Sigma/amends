@@ -24,6 +24,7 @@
     "test:watch": "vitest --config ../vitest.config.ts action/src"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.1",
     "yaml": "^2.9.0"
   }
 }
