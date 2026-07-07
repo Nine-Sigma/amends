@@ -5,3 +5,14 @@ coverage/
 .env
 .env.*
 .DS_Store
+
+# AI tooling (claude, codex, graphify, ralph)
+.claude/
+CLAUDE.md
+.codex/
+AGENTS.md
+graphify-out/
+tasks/
+progress.txt
+.last-branch
+ralph.sh
