@@ -60,11 +60,8 @@ export interface CaseFile {
   [key: string]: unknown;
 }
 
-export interface ParseError {
-  /** Dot-separated JSON path from the document root; '$' is the root itself. */
-  path: string;
-  reason: string;
-}
+export type { ParseError } from '../utils/narrow.js';
+import type { ParseError } from '../utils/narrow.js';
 
 export type ParseResult =
   | { ok: true; caseFile: CaseFile }

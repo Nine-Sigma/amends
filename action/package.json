@@ -4,13 +4,25 @@
   "description": "The Amends GitHub Action: COMPILE, FIX, and RECONCILE stages",
   "type": "module",
   "license": "Apache-2.0",
-  "engines": { "node": ">=22" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "files": ["dist"],
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config ../vitest.config.ts action/src",
     "test:watch": "vitest --config ../vitest.config.ts action/src"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
   }
 }

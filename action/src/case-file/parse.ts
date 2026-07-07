@@ -1,60 +1,13 @@
-import type { CaseFile, ParseError, ParseResult } from './types.js';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((entry) => typeof entry === 'string');
-
-const missingOr = (value: unknown, expected: string): string =>
-  value === undefined ? 'required field is missing' : `expected ${expected}`;
-
-const requireString = (
-  parent: Record<string, unknown>,
-  key: string,
-  path: string,
-  errors: ParseError[],
-): void => {
-  if (typeof parent[key] !== 'string') {
-    errors.push({ path, reason: missingOr(parent[key], 'a string') });
-  }
-};
-
-const requireNumber = (
-  parent: Record<string, unknown>,
-  key: string,
-  path: string,
-  errors: ParseError[],
-): void => {
-  if (typeof parent[key] !== 'number') {
-    errors.push({ path, reason: missingOr(parent[key], 'a number') });
-  }
-};
-
-const requireStringArray = (
-  parent: Record<string, unknown>,
-  key: string,
-  path: string,
-  errors: ParseError[],
-): void => {
-  if (!isStringArray(parent[key])) {
-    errors.push({ path, reason: missingOr(parent[key], 'an array of strings') });
-  }
-};
-
-const requireRecord = (
-  parent: Record<string, unknown>,
-  key: string,
-  path: string,
-  errors: ParseError[],
-): Record<string, unknown> | undefined => {
-  const value = parent[key];
-  if (!isRecord(value)) {
-    errors.push({ path, reason: missingOr(value, 'an object') });
-    return undefined;
-  }
-  return value;
-};
+import {
+  isRecord,
+  missingOr,
+  requireNumber,
+  requireRecord,
+  requireString,
+  requireStringArray,
+} from '../utils/narrow.js';
+import type { ParseError } from '../utils/narrow.js';
+import type { CaseFile, ParseResult } from './types.js';
 
 const validateGroup = (root: Record<string, unknown>, errors: ParseError[]): void => {
   const group = requireRecord(root, 'group', 'group', errors);
