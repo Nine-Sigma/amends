@@ -98,8 +98,32 @@ describe('parseVerifyBundle', () => {
       },
     },
     { verdict: { kind: 'cap_exceeded', fileCount: 11, limit: 10 } },
+    { verdict: { kind: 'evidence_gate_unmet', missing: ['counterfactual_artifact'] } },
+    { verdict: { kind: 'release_unresolved', declared: 'api@2.1.0' } },
   ])('accepts the refusal verdict $verdict.kind', (bundle) => {
     expect(parseVerifyBundle(roundTrip(bundle)).ok).toBe(true);
+  });
+
+  it('rejects an evidence_gate_unmet verdict missing its missing list', () => {
+    const result = parseVerifyBundle({ verdict: { kind: 'evidence_gate_unmet' } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual({
+        path: 'verdict.missing',
+        reason: 'required field is missing',
+      });
+    }
+  });
+
+  it('rejects a release_unresolved verdict missing declared', () => {
+    const result = parseVerifyBundle({ verdict: { kind: 'release_unresolved' } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual({
+        path: 'verdict.declared',
+        reason: 'required field is missing',
+      });
+    }
   });
 
   it('rejects an unknown verdict kind at verdict.kind', () => {

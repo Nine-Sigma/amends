@@ -15,15 +15,14 @@ import { classifyDiffPaths } from '../guardrails/protected-paths.js';
 import { composePrBody } from '../pr/compose-body.js';
 import type { VerificationRunLinks } from '../pr/compose-body.js';
 import { openFixPr } from '../pr/open-pr.js';
-import type { OpenPrResult } from '../pr/open-pr.js';
 import { classifyTier } from '../tier/classify.js';
 import { resolveAutonomy } from '../tier/resolve-autonomy.js';
 import { applyFixDiff } from '../utils/apply-fix-diff.js';
 import type { CommandRunner } from '../utils/exec.js';
 import type { FileWriter } from '../utils/fs.js';
-import type { CounterfactualVerdict } from '../verification/counterfactual.js';
 import { parseFixDiffPaths } from '../verification/diff-paths.js';
 import type { FixBundle, VerifyBundle } from './bundle.js';
+import type { PipelineResult } from './result.js';
 
 export interface PublishStageRequest {
   caseFile: CaseFile;
@@ -44,13 +43,8 @@ export interface PublishStageDeps {
 }
 
 export type PublishStageResult =
-  | { kind: 'published'; outcome: OpenPrResult }
-  /** The verify verdict was a refusal; nothing is written to GitHub. */
-  | { kind: 'not_publishable'; verdictKind: Exclude<CounterfactualVerdict['kind'], 'counterfactual'> }
-  /** Tier 0 / diagnostic_only: the evidence gate is unmet (§7.2). */
-  | { kind: 'evidence_gate_unmet'; reasons: string[] }
-  /** Defensive: verify refuses hard-blocked diffs before running (US-008). */
-  | { kind: 'hard_blocked_diff'; paths: string[] }
+  /** Success plus every gate refusal — refusal verdicts pass through unwrapped. */
+  | PipelineResult
   /** branch_ref is adapter output (§8.1) — validated before use as a git ref. */
   | { kind: 'invalid_branch_ref'; branchRef: string };
 
@@ -88,7 +82,7 @@ export async function runPublishStage(
 ): Promise<PublishStageResult> {
   const verdict = request.verifyBundle.verdict;
   if (verdict.kind !== 'counterfactual') {
-    return { kind: 'not_publishable', verdictKind: verdict.kind };
+    return verdict;
   }
 
   const tier = classifyTier(verdict.observation);
@@ -96,12 +90,13 @@ export async function runPublishStage(
   const resolution = resolveAutonomy(request.config.mode, tierLevel);
   const autonomy = resolution.autonomy;
   if (tierLevel === 0 || autonomy === 'diagnostic_only') {
-    return { kind: 'evidence_gate_unmet', reasons: tier.reasons };
+    return { kind: 'evidence_gate_unmet', missing: tier.reasons };
   }
 
+  // Defensive re-check: verify already refuses hard-blocked diffs before running (US-008).
   const classification = classifyDiffPaths(parseFixDiffPaths(request.fixBundle.fixDiff), request.config);
   if (classification.kind === 'hard_blocked') {
-    return { kind: 'hard_blocked_diff', paths: classification.paths };
+    return { kind: 'guardrail_violation', violation: { kind: 'hard_blocked', paths: classification.paths } };
   }
 
   const branch = request.fixBundle.adapterResult.branch_ref;

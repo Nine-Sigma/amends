@@ -20,7 +20,7 @@ import {
   requireString,
   requireStringArray,
 } from '../utils/narrow.js';
-import type { CounterfactualVerdict } from '../verification/counterfactual.js';
+import type { PipelineVerdict } from './result.js';
 
 export interface FixBundle {
   fixDiff: string;
@@ -32,7 +32,7 @@ export interface FixBundle {
 }
 
 export interface VerifyBundle {
-  verdict: CounterfactualVerdict;
+  verdict: PipelineVerdict;
 }
 
 export type ParseFixBundleResult =
@@ -159,12 +159,18 @@ const validateVerdictArm = (verdict: Record<string, unknown>, errors: ParseError
       requireNumber(verdict, 'fileCount', 'verdict.fileCount', errors);
       requireNumber(verdict, 'limit', 'verdict.limit', errors);
       return;
+    case 'evidence_gate_unmet':
+      requireStringArray(verdict, 'missing', 'verdict.missing', errors);
+      return;
+    case 'release_unresolved':
+      requireString(verdict, 'declared', 'verdict.declared', errors);
+      return;
     default:
       errors.push({
         path: 'verdict.kind',
         reason: missingOr(
           verdict['kind'],
-          "one of 'counterfactual' | 'not_counterfactual' | 'fix_insufficient' | 'guardrail_violation' | 'cap_exceeded'",
+          "one of 'counterfactual' | 'not_counterfactual' | 'fix_insufficient' | 'guardrail_violation' | 'cap_exceeded' | 'evidence_gate_unmet' | 'release_unresolved'",
         ),
       });
   }

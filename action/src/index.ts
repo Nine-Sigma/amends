@@ -19,12 +19,12 @@ import { parseFixBundle, parseVerifyBundle } from './pipeline/bundle.js';
 import type { FixBundle, VerifyBundle } from './pipeline/bundle.js';
 import { runFixStage } from './pipeline/fix.js';
 import { runPublishStage } from './pipeline/publish.js';
+import { summarizePipelineResult } from './pipeline/result.js';
 import { runVerifyStage } from './pipeline/verify.js';
 import { createCommandRunner } from './utils/exec.js';
 import { createFileReader, createFileWriter } from './utils/fs.js';
 import type { ParseError } from './utils/narrow.js';
 import { buildZeroSecretEnv } from './verification/counterfactual.js';
-import type { TestCommand } from './verification/counterfactual.js';
 
 type EnvMap = Readonly<Record<string, string | undefined>>;
 
@@ -194,32 +194,12 @@ const dispatchFix = async (inputs: ActionInputs, env: EnvMap): Promise<DispatchO
   return { ok: false, result: { stage: 'fix', ...result } };
 };
 
-/** validation.test_command is repo-owner-authored case-file data (§8.2) — it runs only under the zero-secret env. */
-const testCommandFrom = (caseFile: CaseFile): TestCommand => {
-  const testCommand = caseFile.validation?.['test_command'];
-  if (typeof testCommand !== 'string' || testCommand.trim() === '') {
-    throw new EntryFault('case file has no validation.test_command; the evidence gate cannot run');
-  }
-  const [command, ...args] = testCommand.trim().split(/\s+/);
-  if (command === undefined) throw new EntryFault('validation.test_command is empty');
-  return { command, args };
-};
-
 const dispatchVerify = async (inputs: ActionInputs, env: EnvMap): Promise<DispatchOutcome> => {
-  const caseFile = await loadCaseFileAt(inputs.caseFilePath);
-  const revision = caseFile.release.revision;
-  if (revision === null) {
-    // §5.4: unresolved release excludes every code-change-PR path (structured taxonomy lands in US-011).
-    return { ok: false, result: { stage: 'verify', kind: 'release_unresolved' } };
-  }
-  const testCommand = testCommandFrom(caseFile);
   const bundle = await runVerifyStage(
     {
+      caseFile: await loadCaseFileAt(inputs.caseFilePath),
       fixBundle: await loadFixBundleAt(inputs.fixBundlePath),
       repoPath: inputs.checkoutPath,
-      originalRevision: revision,
-      testCommand,
-      runnerName: testCommand.command,
       env: buildZeroSecretEnv(env),
       timeoutMs: inputs.timeoutMs,
       config: await loadConfigAt(inputs.configPath),
@@ -277,7 +257,13 @@ const dispatchPublish = async (inputs: ActionInputs, env: EnvMap): Promise<Dispa
     },
     { github, runner: createCommandRunner(), files: createFileWriter() },
   );
-  return { ok: result.kind === 'published', result: { stage: 'publish', ...result } };
+  if (result.kind === 'invalid_branch_ref') {
+    return { ok: false, result: { stage: 'publish', ...result } };
+  }
+  return {
+    ok: result.kind === 'published',
+    result: { stage: 'publish', ...result, summary: summarizePipelineResult(result) },
+  };
 };
 
 export const runAction = async (env: EnvMap): Promise<DispatchOutcome> => {
