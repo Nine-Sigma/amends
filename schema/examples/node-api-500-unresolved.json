@@ -1,0 +1,77 @@
+{
+  "schema_version": "0.3",
+  "group": {
+    "fingerprints": {
+      "provisional": {
+        "algo": "raw-stack-v1",
+        "value": "sha256:1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+        "computed_by": "relay",
+        "release_scoped": true
+      },
+      "canonical": {
+        "algo": "amends-symbolicated-stack-v1",
+        "value": "sha256:7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5",
+        "computed_by": "compiler",
+        "status": "computed"
+      },
+      "source_aliases": [
+        { "provider": "sentry", "kind": "issue_id", "value": "56789" }
+      ]
+    },
+    "occurrence_count": 12,
+    "first_seen": "2026-07-04T22:30:00Z",
+    "last_seen": "2026-07-06T13:55:00Z",
+    "affected_revisions": [],
+    "environments": ["production", "staging"]
+  },
+  "representative_occurrence": {
+    "id": "occ_01j8wz9y8x7w6v5u",
+    "observed_at": "2026-07-06T13:55:00Z",
+    "error": {
+      "type": "TypeError",
+      "message": "Cannot read properties of null (reading 'customer_id')"
+    },
+    "stack": {
+      "raw": [
+        { "file": "/app/dist/routes/pay.js", "line": 87, "col": 31, "function": "chargeCustomer" },
+        { "file": "/app/dist/routes/pay.js", "line": 41, "col": 11, "function": "handler" }
+      ],
+      "symbolicated": null,
+      "symbolication": { "status": "unavailable", "provider": "none" }
+    },
+    "trail": [
+      { "t": -0.4, "kind": "http", "detail": "POST /api/pay → 500", "observed_by": "server_middleware" }
+    ],
+    "logs": [
+      { "scope": "payments", "fields": { "session_present": false, "cart_id": "cart_redacted" }, "level": "warn", "t": -0.2 }
+    ],
+    "runtime": {
+      "platform": "node",
+      "versions": { "node": "22.11.0" }
+    },
+    "env_meta": ["NODE_ENV", "PAYMENT_PROVIDER"],
+    "user_report": null
+  },
+  "related_occurrences": [],
+  "release": {
+    "declared": "api@2.1.0",
+    "revision": null,
+    "resolution": {
+      "status": "unresolved",
+      "attempted_methods": ["env_git_sha", "tag_rule"],
+      "reason": "declared release 'api@2.1.0' matched no tag and no AMENDS_RELEASE sha was captured"
+    },
+    "deployed_at": "2026-07-04T20:00:00Z"
+  },
+  "work_item": {
+    "kind": "github_issue",
+    "id": "1301",
+    "url": "https://github.com/example-org/shop-api/issues/1301",
+    "external_refs": []
+  },
+  "intent_refs": ["intents/payments.md"],
+  "validation": {
+    "test_command": "pnpm --filter api test",
+    "artifact_type_candidates": ["unit_test", "integration_test"]
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema_version": "0.3",
+  "group": {
+    "fingerprints": {
+      "provisional": {
+        "algo": "raw-stack-v1",
+        "value": "sha256:5f1c9d2e8b7a4f3061e2d5c8a9b0f1e2d3c4b5a69788c9d0e1f2a3b4c5d6e7f8",
+        "computed_by": "relay",
+        "release_scoped": true
+      },
+      "canonical": {
+        "algo": "amends-symbolicated-stack-v1",
+        "value": "sha256:9b2c4e6f8a0d1c3e5b7a9d0f2e4c6a8b0d1f3e5c7a9b1d3f5e7c9a0b2d4f6e8c",
+        "computed_by": "compiler",
+        "status": "computed"
+      },
+      "source_aliases": []
+    },
+    "occurrence_count": 7,
+    "first_seen": "2026-07-05T09:12:00Z",
+    "last_seen": "2026-07-06T14:00:00Z",
+    "affected_revisions": ["abc123def4567890abc123def4567890abc123de"],
+    "environments": ["production"]
+  },
+  "representative_occurrence": {
+    "id": "occ_01j8x2b3c4d5e6f7",
+    "observed_at": "2026-07-06T14:00:00Z",
+    "error": {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'total')"
+    },
+    "stack": {
+      "raw": [
+        { "file": "https://shop.example.com/assets/main-8f3a2b.js", "line": 1, "col": 48231, "function": "t" },
+        { "file": "https://shop.example.com/assets/main-8f3a2b.js", "line": 1, "col": 47990, "function": "onClick" }
+      ],
+      "symbolicated": [
+        { "file": "src/checkout/total.ts", "line": 42, "col": 17, "function": "computeTotal" },
+        { "file": "src/checkout/PayButton.tsx", "line": 18, "col": 9, "function": "handlePay" }
+      ],
+      "symbolication": { "status": "computed", "provider": "amends-compile" }
+    },
+    "trail": [
+      { "t": -4.2, "kind": "navigation", "detail": "/checkout" },
+      { "t": -1.1, "kind": "http", "detail": "POST /api/pay → 500", "observed_by": "browser_breadcrumb" }
+    ],
+    "logs": [
+      { "scope": "checkout", "fields": { "couponApplied": true, "itemCount": 3 }, "level": "info", "t": -2.0 }
+    ],
+    "runtime": {
+      "platform": "browser",
+      "versions": { "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" }
+    },
+    "env_meta": ["NODE_ENV", "NEXT_PUBLIC_API_BASE"],
+    "user_report": {
+      "text": "I clicked pay and the whole page went blank. Cart still shows 3 items.",
+      "contact_optional": null
+    }
+  },
+  "related_occurrences": [
+    { "id": "occ_01j8x1a9d0e1f2a3", "observed_at": "2026-07-06T11:41:00Z" }
+  ],
+  "release": {
+    "declared": "web@1.4.2",
+    "revision": "abc123def4567890abc123def4567890abc123de",
+    "resolution": { "status": "resolved", "method": "env_git_sha" },
+    "deployed_at": "2026-07-06T08:00:00Z",
+    "diff_from_last_good": "9f8e7d6..abc123d"
+  },
+  "work_item": {
+    "kind": "github_issue",
+    "id": "1234",
+    "url": "https://github.com/example-org/shop/issues/1234",
+    "external_refs": []
+  },
+  "intent_refs": ["intents/checkout.md"],
+  "validation": {
+    "test_command": "pnpm --filter web test",
+    "artifact_type_candidates": ["unit_test", "component_test"]
+  }
+}

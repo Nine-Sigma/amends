@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.3",
+  "group": {
+    "fingerprints": {
+      "provisional": {
+        "algo": "raw-stack-v1",
+        "value": "sha256:e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3",
+        "computed_by": "relay",
+        "release_scoped": true
+      },
+      "canonical": {
+        "algo": "amends-symbolicated-stack-v1",
+        "value": null,
+        "computed_by": "compiler",
+        "status": "pending"
+      },
+      "source_aliases": []
+    },
+    "occurrence_count": 3,
+    "first_seen": "2026-07-06T02:10:00Z",
+    "last_seen": "2026-07-06T12:05:00Z",
+    "affected_revisions": ["7788990011aabbccdd7788990011aabbccdd7788"],
+    "environments": ["production"]
+  },
+  "representative_occurrence": {
+    "id": "occ_01j8wq4r3s2t1u0v",
+    "observed_at": "2026-07-06T12:05:00Z",
+    "error": {
+      "type": "Error",
+      "message": "Unexpected end of JSON input"
+    },
+    "stack": {
+      "raw": [
+        { "file": "/srv/worker/dist/consume.js", "line": 12, "col": 3, "function": "parseMessage" }
+      ],
+      "symbolicated": null,
+      "symbolication": { "status": "unavailable", "provider": "none" }
+    },
+    "trail": [],
+    "logs": [],
+    "runtime": {
+      "platform": "node",
+      "versions": { "node": "22.11.0" }
+    },
+    "env_meta": ["NODE_ENV"],
+    "user_report": null
+  },
+  "related_occurrences": [],
+  "release": {
+    "declared": "worker@0.9.1",
+    "revision": "7788990011aabbccdd7788990011aabbccdd7788",
+    "resolution": { "status": "resolved", "method": "mapping_file" },
+    "deployed_at": "2026-07-05T18:00:00Z",
+    "diff_from_last_good": "665544f..7788990"
+  },
+  "work_item": {
+    "kind": "github_issue",
+    "id": "1422",
+    "url": "https://github.com/example-org/shop-worker/issues/1422",
+    "external_refs": []
+  },
+  "intent_refs": []
+}
