@@ -1,0 +1,7 @@
+packages:
+  - schema
+  - sdk/*
+  - cli
+  - relay
+  - action
+  - examples/*

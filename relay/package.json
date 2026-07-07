@@ -1,0 +1,14 @@
+{
+  "name": "@amends/relay",
+  "version": "0.0.0",
+  "description": "Self-hosted ingest relay template (Cloudflare Workers / Vercel)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  }
+}

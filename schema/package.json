@@ -1,0 +1,14 @@
+{
+  "name": "@amends/schema",
+  "version": "0.0.0",
+  "description": "The Amends protocol: capture-event and case-file JSON Schemas, examples, and conformance suite",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@amends/cli",
+  "version": "0.0.0",
+  "description": "Amends CLI: init, validate-config, upload-sourcemaps",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  }
+}
