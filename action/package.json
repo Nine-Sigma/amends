@@ -20,8 +20,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --config ../vitest.config.ts action/src",
-    "test:watch": "vitest --config ../vitest.config.ts action/src"
+    "test": "vitest run --config ../vitest.config.ts action/src action/agents",
+    "test:watch": "vitest --config ../vitest.config.ts action/src action/agents"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",

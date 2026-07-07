@@ -1,0 +1,9 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 61004,
+  "num_turns": 9,
+  "result": "Fix applied together with a counterfactual test artifact.",
+  "session_id": "0b6c3a1d-7e2f-4c5b-9a8d-4f1e2d3c4b5a"
+}
