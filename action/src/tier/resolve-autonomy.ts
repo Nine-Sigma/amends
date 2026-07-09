@@ -12,6 +12,11 @@ export type AutonomyResolution =
   | { autonomy: EffectiveAutonomy; downgraded: false }
   | { autonomy: EffectiveAutonomy; downgraded: true; annotation: string };
 
+/** With any earned evidence (tier > 0), diagnostic_only is unreachable — the overload below carries that proof. */
+export type ProceedResolution =
+  | { autonomy: Exclude<EffectiveAutonomy, 'diagnostic_only'>; downgraded: false }
+  | { autonomy: Exclude<EffectiveAutonomy, 'diagnostic_only'>; downgraded: true; annotation: string };
+
 const MODE_CEILINGS: Record<Mode, EffectiveAutonomy> = {
   'issue-only': 'issue_only',
   pr: 'normal_pr',
@@ -33,7 +38,9 @@ const downgrade = (autonomy: EffectiveAutonomy, mode: Mode, tier: Tier): Autonom
  * never raise autonomy because tier comes only from classifyTier over the
  * mechanical VerificationObservation.
  */
-export const resolveAutonomy = (mode: Mode, tier: Tier): AutonomyResolution => {
+export function resolveAutonomy(mode: Mode, tier: Exclude<Tier, 0>): ProceedResolution;
+export function resolveAutonomy(mode: Mode, tier: Tier): AutonomyResolution;
+export function resolveAutonomy(mode: Mode, tier: Tier): AutonomyResolution {
   if (tier === 0) {
     return downgrade('diagnostic_only', mode, tier);
   }
@@ -46,4 +53,4 @@ export const resolveAutonomy = (mode: Mode, tier: Tier): AutonomyResolution => {
   return mode === 'pr'
     ? { autonomy: 'normal_pr', downgraded: false }
     : { autonomy: 'automerge_eligible', downgraded: false };
-};
+}

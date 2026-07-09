@@ -11154,6 +11154,15 @@ var requireStringArray = (parent, key, path, errors) => {
     errors.push({ path, reason: missingOr(parent[key], "an array of strings") });
   }
 };
+var requireOneOf = (parent, key, path, allowed, errors) => {
+  const value = parent[key];
+  if (typeof value === "string" && allowed.includes(value)) return value;
+  errors.push({
+    path,
+    reason: missingOr(value, `one of ${allowed.map((member) => `'${member}'`).join(" | ")}`)
+  });
+  return void 0;
+};
 var requireRecord = (parent, key, path, errors) => {
   const value = parent[key];
   if (!isRecord(value)) {
@@ -11329,36 +11338,104 @@ var loadConfig = (fileContent) => {
   return { ok: true, config };
 };
 
-// src/github/client.ts
-var runGit = async (deps, args) => {
-  const result = await deps.runner.run({
-    command: "git",
-    args,
-    cwd: deps.checkoutPath,
-    env: deps.env,
-    timeoutMs: deps.timeoutMs
-  });
-  const verb = args[0] ?? "git";
-  if (result.kind === "timed_out") {
-    throw new Error(`git ${verb} timed out after ${String(result.timeoutMs)}ms`);
-  }
-  if (result.exitCode !== 0) {
-    throw new Error(`git ${verb} exited ${String(result.exitCode)}: ${result.stderr}`);
-  }
+// src/utils/exec.ts
+import { spawn } from "node:child_process";
+var MAX_SIGNATURE_OUTPUT = 400;
+var commandFailureSignature = (result) => {
+  if (result.kind === "timed_out") return `timed_out after ${result.timeoutMs}ms`;
+  const output = (result.stderr.trim() || result.stdout.trim()).slice(0, MAX_SIGNATURE_OUTPUT);
+  return `exit ${result.exitCode}: ${output}`;
 };
+var createCapture = (cap) => {
+  const chunks = [];
+  let retained = 0;
+  return {
+    push: (chunk) => {
+      if (retained >= cap) return;
+      const room = cap - retained;
+      const kept = chunk.length > room ? chunk.subarray(0, room) : chunk;
+      chunks.push(kept);
+      retained += kept.length;
+    },
+    text: () => Buffer.concat(chunks).toString("utf8")
+  };
+};
+var createCommandRunner = () => ({
+  run: (request2) => new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(request2.command, request2.args, {
+      cwd: request2.cwd,
+      env: request2.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const cap = request2.maxCapturedBytes ?? Number.MAX_SAFE_INTEGER;
+    const stdout = createCapture(cap);
+    const stderr = createCapture(cap);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, request2.timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr.push(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      rejectPromise(error);
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolvePromise(
+        timedOut ? { kind: "timed_out", timeoutMs: request2.timeoutMs } : { kind: "completed", exitCode: exitCode ?? 1, stdout: stdout.text(), stderr: stderr.text() }
+      );
+    });
+  })
+});
+
+// src/utils/git.ts
+var runGitOrThrow = async (context, args) => {
+  const result = await context.runner.run({
+    command: "git",
+    args: [...args],
+    cwd: context.repoPath,
+    env: { ...context.env },
+    timeoutMs: context.timeoutMs
+  });
+  if (result.kind !== "completed" || result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed in ${context.repoPath}: ${commandFailureSignature(result)}`
+    );
+  }
+  return result.stdout;
+};
+var checkoutRevision = async (context, revision) => {
+  await runGitOrThrow(context, ["checkout", "--force", revision]);
+  await runGitOrThrow(context, ["clean", "-fd"]);
+};
+
+// src/github/client.ts
+var gitContext = (deps) => ({
+  runner: deps.runner,
+  repoPath: deps.checkoutPath,
+  env: deps.env,
+  timeoutMs: deps.timeoutMs
+});
 var createOctokitGitHubClient = (deps) => ({
   createBranchAndPush: async ({ branch, commitMessage, paths }) => {
-    await runGit(deps, ["checkout", "-b", branch]);
-    await runGit(deps, ["add", "--", ...paths]);
-    await runGit(deps, ["commit", "--message", commitMessage]);
-    await runGit(deps, ["push", "origin", branch]);
+    const context = gitContext(deps);
+    await runGitOrThrow(context, ["checkout", "-b", branch]);
+    await runGitOrThrow(context, ["add", "--", ...paths]);
+    await runGitOrThrow(context, ["commit", "--message", commitMessage]);
+    await runGitOrThrow(context, ["push", "origin", branch]);
   },
   openPullRequest: async ({ title, body, head, base }) => {
     const { data } = await deps.octokit.rest.pulls.create({ ...deps.repo, title, body, head, base });
     return { number: data.number, url: data.html_url };
   },
-  addLabel: async ({ issueNumber, label }) => {
-    await deps.octokit.rest.issues.addLabels({ ...deps.repo, issue_number: issueNumber, labels: [label] });
+  addLabels: async ({ issueNumber, labels }) => {
+    await deps.octokit.rest.issues.addLabels({ ...deps.repo, issue_number: issueNumber, labels });
   },
   createComment: async ({ issueNumber, body }) => {
     await deps.octokit.rest.issues.createComment({ ...deps.repo, issue_number: issueNumber, body });
@@ -11382,13 +11459,7 @@ var validateUsage = (parent, errors) => {
   requireNumberOrNull(usage, "input_tokens", "usage.input_tokens", errors);
   requireNumberOrNull(usage, "output_tokens", "usage.output_tokens", errors);
   requireNumberOrNull(usage, "estimated_usd", "usage.estimated_usd", errors);
-  const source = usage["usage_source"];
-  if (typeof source !== "string" || !USAGE_SOURCES.includes(source)) {
-    errors.push({
-      path: "usage.usage_source",
-      reason: missingOr(source, "one of 'reported' | 'estimated' | 'unavailable'")
-    });
-  }
+  requireOneOf(usage, "usage_source", "usage.usage_source", USAGE_SOURCES, errors);
 };
 var parseAdapterResult = (input) => {
   const errors = [];
@@ -11443,7 +11514,6 @@ var validateAdapterResult = (parent, errors) => {
   if (!parsed.ok) {
     errors.push(...parsed.errors.map((error) => ({ ...error, path: `adapterResult.${error.path}` })));
   }
-  requireNumber(result, "exit_code", "adapterResult.exit_code", errors);
 };
 var validateAgentIdentity = (parent, errors) => {
   const identity = requireRecord(parent, "agentIdentity", "agentIdentity", errors);
@@ -11483,32 +11553,25 @@ var validateObservation = (parent, path, errors) => {
   requireBoolean(observation, "serverProcessSpawned", `${path}.serverProcessSpawned`, errors);
   requireBoolean(observation, "httpExercised", `${path}.httpExercised`, errors);
   requireBoolean(observation, "browserExercised", `${path}.browserExercised`, errors);
-  const dataPath = observation["dataPath"];
-  if (dataPath !== "fixture-only" && dataPath !== "live-path") {
-    errors.push({
-      path: `${path}.dataPath`,
-      reason: missingOr(dataPath, "one of 'fixture-only' | 'live-path'")
-    });
-  }
+  requireOneOf(observation, "dataPath", `${path}.dataPath`, ["fixture-only", "live-path"], errors);
   validateRunOutcome(observation, "originalRun", `${path}.originalRun`, errors);
   validateRunOutcome(observation, "patchedRun", `${path}.patchedRun`, errors);
 };
 var validateGuardrailViolation = (verdict, errors) => {
   const violation = requireRecord(verdict, "violation", "verdict.violation", errors);
   if (violation === void 0) return;
-  const kind = violation["kind"];
-  if (kind === "hard_blocked" || kind === "invariance") {
-    requireStringArray(violation, "paths", "verdict.violation.paths", errors);
-    return;
-  }
+  const kind = requireOneOf(
+    violation,
+    "kind",
+    "verdict.violation.kind",
+    ["hard_blocked", "invariance", "unenumerable_diff"],
+    errors
+  );
   if (kind === "unenumerable_diff") {
     requireString(violation, "reason", "verdict.violation.reason", errors);
-    return;
+  } else if (kind !== void 0) {
+    requireStringArray(violation, "paths", "verdict.violation.paths", errors);
   }
-  errors.push({
-    path: "verdict.violation.kind",
-    reason: missingOr(kind, "one of 'hard_blocked' | 'invariance' | 'unenumerable_diff'")
-  });
 };
 var validateVerdictArm = (verdict, errors) => {
   switch (verdict["kind"]) {
@@ -11594,7 +11657,7 @@ var runAdapter = async (invocation, runner) => {
   if (!parsed.ok) {
     return { kind: "nonconforming", errors: parsed.errors };
   }
-  return { kind: "ok", result: { ...parsed.body, exit_code: outcome.exitCode } };
+  return { kind: "ok", result: parsed.body };
 };
 
 // src/prompt/assemble.ts
@@ -11651,64 +11714,6 @@ var assemblePrompt = (caseFile, template) => {
     UNTRUSTED_CLOSE
   ].join("\n");
   return { ok: true, prompt: template.replace(UNTRUSTED_BLOCKS_PLACEHOLDER, () => block) };
-};
-
-// src/utils/exec.ts
-import { spawn } from "node:child_process";
-var MAX_SIGNATURE_OUTPUT = 400;
-var commandFailureSignature = (result) => {
-  if (result.kind === "timed_out") return `timed_out after ${result.timeoutMs}ms`;
-  const output = (result.stderr.trim() || result.stdout.trim()).slice(0, MAX_SIGNATURE_OUTPUT);
-  return `exit ${result.exitCode}: ${output}`;
-};
-var createCommandRunner = () => ({
-  run: (request2) => new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(request2.command, request2.args, {
-      cwd: request2.cwd,
-      env: request2.env,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGKILL");
-    }, request2.timeoutMs);
-    child.stdout.on("data", (chunk) => stdout += chunk.toString());
-    child.stderr.on("data", (chunk) => stderr += chunk.toString());
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      rejectPromise(error);
-    });
-    child.on("close", (exitCode) => {
-      clearTimeout(timer);
-      resolvePromise(
-        timedOut ? { kind: "timed_out", timeoutMs: request2.timeoutMs } : { kind: "completed", exitCode: exitCode ?? 1, stdout, stderr }
-      );
-    });
-  })
-});
-
-// src/utils/git.ts
-var runGitOrThrow = async (context, args) => {
-  const result = await context.runner.run({
-    command: "git",
-    args: [...args],
-    cwd: context.repoPath,
-    env: { ...context.env },
-    timeoutMs: context.timeoutMs
-  });
-  if (result.kind !== "completed" || result.exitCode !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed in ${context.repoPath}: ${commandFailureSignature(result)}`
-    );
-  }
-  return result.stdout;
-};
-var checkoutRevision = async (context, revision) => {
-  await runGitOrThrow(context, ["checkout", "--force", revision]);
-  await runGitOrThrow(context, ["clean", "-fd"]);
 };
 
 // src/pipeline/fix.ts
@@ -11900,8 +11905,8 @@ ${humanReviewSection(request2.classification.paths)}` : request2.body;
   if (request2.classification.kind === "review_required") {
     labels.push(HUMAN_REVIEW_LABEL);
   }
-  for (const label of labels) {
-    await client.addLabel({ issueNumber: pr.number, label });
+  if (labels.length > 0) {
+    await client.addLabels({ issueNumber: pr.number, labels });
   }
   const autoMergeEligible = request2.autonomy === "automerge_eligible" && request2.classification.kind !== "review_required";
   return { kind: "pr_opened", pr, labels, autoMergeEligible };
@@ -11960,7 +11965,7 @@ var downgrade = (autonomy, mode, tier) => ({
   downgraded: true,
   annotation: `Requested mode '${mode}' allows up to '${MODE_CEILINGS[mode]}', but the verification evidence classified mechanically at Tier ${String(tier)}; effective autonomy is '${autonomy}'.`
 });
-var resolveAutonomy = (mode, tier) => {
+function resolveAutonomy(mode, tier) {
   if (tier === 0) {
     return downgrade("diagnostic_only", mode, tier);
   }
@@ -11971,7 +11976,7 @@ var resolveAutonomy = (mode, tier) => {
     return downgrade("candidate_pr", mode, tier);
   }
   return mode === "pr" ? { autonomy: "normal_pr", downgraded: false } : { autonomy: "automerge_eligible", downgraded: false };
-};
+}
 
 // src/utils/apply-fix-diff.ts
 import { join as join2 } from "node:path";
@@ -12138,11 +12143,11 @@ async function runPublishStage(request2, deps) {
   }
   const tier = classifyTier(verdict.observation);
   const tierLevel = tier.tier;
-  const resolution = resolveAutonomy(request2.config.mode, tierLevel);
-  const autonomy = resolution.autonomy;
-  if (tierLevel === 0 || autonomy === "diagnostic_only") {
+  if (tierLevel === 0) {
     return { kind: "evidence_gate_unmet", missing: tier.reasons };
   }
+  const resolution = resolveAutonomy(request2.config.mode, tierLevel);
+  const autonomy = resolution.autonomy;
   const revision = request2.caseFile.release.revision;
   if (request2.caseFile.release.resolution.status === "unresolved" || revision === null) {
     return { kind: "release_unresolved", declared: request2.caseFile.release.declared };
@@ -12270,12 +12275,14 @@ function checkGuardrails(fixPaths, artifactPaths, config) {
   }
   return void 0;
 }
+var TEST_RUN_CAPTURE_BYTES = 16384;
 var runCommand = (request2, deps, command, args) => deps.runner.run({
   command,
   args: [...args],
   cwd: request2.repoPath,
   env: { ...request2.env },
-  timeoutMs: request2.timeoutMs
+  timeoutMs: request2.timeoutMs,
+  maxCapturedBytes: TEST_RUN_CAPTURE_BYTES
 });
 var resetToOriginal = (request2, deps) => checkoutRevision(
   { runner: deps.runner, repoPath: request2.repoPath, env: request2.env, timeoutMs: request2.timeoutMs },
@@ -12570,14 +12577,19 @@ var dispatchFix = async (inputs, env) => {
   return { ok: false, result: { stage: "fix", ...result } };
 };
 var dispatchVerify = async (inputs, env) => {
+  const [caseFile, fixBundle, config] = await Promise.all([
+    loadCaseFileAt(inputs.caseFilePath),
+    loadFixBundleAt(inputs.fixBundlePath),
+    loadConfigAt(inputs.configPath)
+  ]);
   const bundle = await runVerifyStage(
     {
-      caseFile: await loadCaseFileAt(inputs.caseFilePath),
-      fixBundle: await loadFixBundleAt(inputs.fixBundlePath),
+      caseFile,
+      fixBundle,
       repoPath: inputs.checkoutPath,
       env: buildZeroSecretEnv(env),
       timeoutMs: inputs.timeoutMs,
-      config: await loadConfigAt(inputs.configPath),
+      config,
       bundlePath: inputs.verifyBundlePath
     },
     { runner: createCommandRunner(), files: createFileWriter() }
@@ -12618,12 +12630,18 @@ var dispatchPublish = async (inputs, env) => {
     timeoutMs: inputs.timeoutMs
   });
   const runLink = `${env["GITHUB_SERVER_URL"] ?? "https://github.com"}/${repoFull}/actions/runs/${env["GITHUB_RUN_ID"] ?? "unknown"}`;
+  const [caseFile, fixBundle, verifyBundle, config] = await Promise.all([
+    loadCaseFileAt(inputs.caseFilePath),
+    loadFixBundleAt(inputs.fixBundlePath),
+    loadVerifyBundleAt(inputs.verifyBundlePath),
+    loadConfigAt(inputs.configPath)
+  ]);
   const result = await runPublishStage(
     {
-      caseFile: await loadCaseFileAt(inputs.caseFilePath),
-      fixBundle: await loadFixBundleAt(inputs.fixBundlePath),
-      verifyBundle: await loadVerifyBundleAt(inputs.verifyBundlePath),
-      config: await loadConfigAt(inputs.configPath),
+      caseFile,
+      fixBundle,
+      verifyBundle,
+      config,
       repoPath: inputs.checkoutPath,
       base: inputs.base,
       // Both runs execute inside the single verify job, so they share one run link.

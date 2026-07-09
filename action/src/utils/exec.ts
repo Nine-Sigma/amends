@@ -11,6 +11,8 @@ export interface CommandRequest {
   cwd: string;
   env: Record<string, string>;
   timeoutMs: number;
+  /** Cap on retained stdout/stderr bytes (each). Callers that only need a failure signature set this; adapter-JSON callers omit it. */
+  maxCapturedBytes?: number;
 }
 
 export type CommandResult =
@@ -30,6 +32,22 @@ export const commandFailureSignature = (result: CommandResult): string => {
   return `exit ${result.exitCode}: ${output}`;
 };
 
+/** Chunked capture: O(1) appends joined once at exit, retaining at most `cap` bytes. */
+const createCapture = (cap: number): { push(chunk: Buffer): void; text(): string } => {
+  const chunks: Buffer[] = [];
+  let retained = 0;
+  return {
+    push: (chunk) => {
+      if (retained >= cap) return;
+      const room = cap - retained;
+      const kept = chunk.length > room ? chunk.subarray(0, room) : chunk;
+      chunks.push(kept);
+      retained += kept.length;
+    },
+    text: () => Buffer.concat(chunks).toString('utf8'),
+  };
+};
+
 export const createCommandRunner = (): CommandRunner => ({
   run: (request) =>
     new Promise((resolvePromise, rejectPromise) => {
@@ -39,16 +57,21 @@ export const createCommandRunner = (): CommandRunner => ({
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      let stdout = '';
-      let stderr = '';
+      const cap = request.maxCapturedBytes ?? Number.MAX_SAFE_INTEGER;
+      const stdout = createCapture(cap);
+      const stderr = createCapture(cap);
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill('SIGKILL');
       }, request.timeoutMs);
 
-      child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
-      child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout.push(chunk);
+      });
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr.push(chunk);
+      });
       child.on('error', (error) => {
         clearTimeout(timer);
         rejectPromise(error);
@@ -58,7 +81,7 @@ export const createCommandRunner = (): CommandRunner => ({
         resolvePromise(
           timedOut
             ? { kind: 'timed_out', timeoutMs: request.timeoutMs }
-            : { kind: 'completed', exitCode: exitCode ?? 1, stdout, stderr },
+            : { kind: 'completed', exitCode: exitCode ?? 1, stdout: stdout.text(), stderr: stderr.text() },
         );
       });
     }),

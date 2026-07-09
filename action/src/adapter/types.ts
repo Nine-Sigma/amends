@@ -60,7 +60,5 @@ export interface AdapterResultBody {
   [key: string]: unknown;
 }
 
-/** A conformant adapter result: the narrowed JSON body plus the observed process exit code. */
-export interface AdapterResult extends AdapterResultBody {
-  exit_code: number;
-}
+/** A conformant adapter result. Exit-code semantics live in run-adapter.ts outcomes; a self-reported exit_code field is never trusted. */
+export type AdapterResult = AdapterResultBody;

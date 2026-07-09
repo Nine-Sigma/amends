@@ -14,8 +14,8 @@ import { join } from 'node:path';
 
 import type { AdapterInput, AdapterResultBody, UsageBlock } from '../src/adapter/types.js';
 import type { CommandRequest, CommandRunner } from '../src/utils/exec.js';
-import { commandFailureSignature } from '../src/utils/exec.js';
 import type { FileReader, FileWriter } from '../src/utils/fs.js';
+import { runGitOrThrow } from '../src/utils/git.js';
 import type { ParseError } from '../src/utils/narrow.js';
 import { isRecord } from '../src/utils/narrow.js';
 
@@ -119,19 +119,16 @@ const claudeReportedError = (output: Record<string, unknown>): string | undefine
 };
 
 /** Git failures inside the adapter's own checkout are environment faults — they reject, never map to adapter outcomes. */
-const runGit = async (deps: ClaudeCodeDeps, request: ClaudeCodeRequest, args: string[]): Promise<string> => {
-  const result = await deps.runner.run({
-    command: 'git',
+const runGit = (deps: ClaudeCodeDeps, request: ClaudeCodeRequest, args: string[]): Promise<string> =>
+  runGitOrThrow(
+    {
+      runner: deps.runner,
+      repoPath: request.input.checkout_path,
+      env: request.env,
+      timeoutMs: request.timeoutMs,
+    },
     args,
-    cwd: request.input.checkout_path,
-    env: request.env,
-    timeoutMs: request.timeoutMs,
-  });
-  if (result.kind === 'timed_out' || result.exitCode !== 0) {
-    throw new Error(`git ${args[0] ?? ''} failed: ${commandFailureSignature(result)}`);
-  }
-  return result.stdout;
-};
+  );
 
 interface WorkingTreeChange {
   path: string;

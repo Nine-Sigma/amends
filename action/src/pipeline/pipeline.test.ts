@@ -66,7 +66,7 @@ describe('fix -> verify -> publish pipeline (integration, in-process, no network
       expect(body).not.toMatch(/proven/i);
 
       const prNumber = github.pullRequests.length > 0 ? 101 : 0;
-      expect(github.labels).toContainEqual({ issueNumber: prNumber, label: CANDIDATE_LABEL });
+      expect(github.labels).toContainEqual({ issueNumber: prNumber, labels: [CANDIDATE_LABEL] });
 
       const patchedFile = await readFile(join(harness.repo.repoPath, 'src/total.js'), 'utf8');
       expect(patchedFile).toContain('item.quantity');

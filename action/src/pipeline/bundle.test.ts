@@ -11,7 +11,6 @@ const validFixBundle = (): FixBundle => ({
     fix_diff_path: 'amends-out/fix.patch',
     artifact_paths: ['artifact.test.mjs'],
     usage: { input_tokens: 1, output_tokens: 2, estimated_usd: 0.01, usage_source: 'reported' },
-    exit_code: 0,
   },
   agentIdentity: { agent: 'fake-adapter', model: 'fake-model' },
 });

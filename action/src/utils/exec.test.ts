@@ -53,6 +53,23 @@ describe('createCommandRunner', () => {
     );
   });
 
+  it('caps retained output at maxCapturedBytes without affecting the exit code', async () => {
+    const runner = createCommandRunner();
+
+    const result = await runner.run({
+      command: node,
+      args: ['-e', "process.stdout.write('x'.repeat(100_000));"],
+      cwd: process.cwd(),
+      env: {},
+      timeoutMs: 10_000,
+      maxCapturedBytes: 1_024,
+    });
+
+    if (result.kind !== 'completed') throw new Error('expected completed');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toHaveLength(1_024);
+  });
+
   it('rejects when the command cannot be spawned (environment fault, not adapter output)', async () => {
     const runner = createCommandRunner();
 

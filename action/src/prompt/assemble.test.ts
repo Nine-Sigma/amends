@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseCaseFile } from '../case-file/parse.js';
+import { loadFixtureCaseFileSync } from '../../tests/helpers/fixtures.js';
 import type { CaseFile } from '../case-file/types.js';
 import {
   assemblePrompt,
@@ -10,18 +10,11 @@ import {
   UNTRUSTED_OPEN_PREFIX,
 } from './assemble.js';
 
-const fixturesDir = resolve(import.meta.dirname, '../../../schema/examples');
 const templatePath = resolve(import.meta.dirname, '../../prompts/fix-pass.md');
 
 const loadTemplate = (): string => readFileSync(templatePath, 'utf8');
 
-const loadFixture = (name: string): CaseFile => {
-  const parsed = parseCaseFile(
-    JSON.parse(readFileSync(resolve(fixturesDir, name), 'utf8')),
-  );
-  if (!parsed.ok) throw new Error(`fixture ${name} failed to parse`);
-  return parsed.caseFile;
-};
+const loadFixture = (name: string): CaseFile => loadFixtureCaseFileSync(name);
 
 const recordAt = (root: unknown, path: string): Record<string, unknown> => {
   let current: unknown = root;

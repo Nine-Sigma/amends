@@ -8,21 +8,21 @@ import type {
   BranchPushRequest,
   CommentRequest,
   GitHubClient,
-  LabelRequest,
+  LabelsRequest,
   PullRequestRequest,
 } from '../../src/github/client.js';
 
 export interface RecordingGitHub extends GitHubClient {
   readonly branchPushes: BranchPushRequest[];
   readonly pullRequests: PullRequestRequest[];
-  readonly labels: LabelRequest[];
+  readonly labels: LabelsRequest[];
   readonly comments: CommentRequest[];
 }
 
 export const createRecordingGitHub = (): RecordingGitHub => {
   const branchPushes: BranchPushRequest[] = [];
   const pullRequests: PullRequestRequest[] = [];
-  const labels: LabelRequest[] = [];
+  const labels: LabelsRequest[] = [];
   const comments: CommentRequest[] = [];
   let nextPrNumber = 101;
   return {
@@ -43,7 +43,7 @@ export const createRecordingGitHub = (): RecordingGitHub => {
         url: `https://github.example/example-org/shop-api/pull/${String(number)}`,
       });
     },
-    addLabel: (request) => {
+    addLabels: (request) => {
       labels.push(request);
       return Promise.resolve();
     },

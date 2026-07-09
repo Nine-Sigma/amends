@@ -1,5 +1,5 @@
 import type { ParseError } from '../utils/narrow.js';
-import { isRecord, missingOr, requireString, requireStringArray } from '../utils/narrow.js';
+import { isRecord, missingOr, requireOneOf, requireString, requireStringArray } from '../utils/narrow.js';
 import type { AdapterResultBody, UsageSource } from './types.js';
 
 export type ParseAdapterResultOutcome =
@@ -29,13 +29,7 @@ const validateUsage = (parent: Record<string, unknown>, errors: ParseError[]): v
   requireNumberOrNull(usage, 'input_tokens', 'usage.input_tokens', errors);
   requireNumberOrNull(usage, 'output_tokens', 'usage.output_tokens', errors);
   requireNumberOrNull(usage, 'estimated_usd', 'usage.estimated_usd', errors);
-  const source = usage['usage_source'];
-  if (typeof source !== 'string' || !USAGE_SOURCES.includes(source as UsageSource)) {
-    errors.push({
-      path: 'usage.usage_source',
-      reason: missingOr(source, "one of 'reported' | 'estimated' | 'unavailable'"),
-    });
-  }
+  requireOneOf(usage, 'usage_source', 'usage.usage_source', USAGE_SOURCES, errors);
 };
 
 /**

@@ -70,5 +70,5 @@ export const runAdapter = async (
   if (!parsed.ok) {
     return { kind: 'nonconforming', errors: parsed.errors };
   }
-  return { kind: 'ok', result: { ...parsed.body, exit_code: outcome.exitCode } };
+  return { kind: 'ok', result: parsed.body };
 };

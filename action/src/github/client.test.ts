@@ -101,7 +101,7 @@ describe('createOctokitGitHubClient', () => {
 
     await expect(
       client.createBranchAndPush({ branch: 'b', commitMessage: 'm', paths: ['f.js'] }),
-    ).rejects.toThrow(/exited 128/);
+    ).rejects.toThrow(/exit 128/);
   });
 
   it('createBranchAndPush rejects on timeout', async () => {
@@ -110,7 +110,7 @@ describe('createOctokitGitHubClient', () => {
 
     await expect(
       client.createBranchAndPush({ branch: 'b', commitMessage: 'm', paths: ['f.js'] }),
-    ).rejects.toThrow(/timed out/);
+    ).rejects.toThrow(/timed_out/);
   });
 
   it(
@@ -185,17 +185,22 @@ describe('createOctokitGitHubClient', () => {
     ]);
   });
 
-  it('addLabel and createComment map to the issues API with the repo ref', async () => {
+  it('addLabels and createComment map to the issues API with the repo ref', async () => {
     const octokit = recordingOctokit();
     const client = makeClient(recordingRunner(), octokit);
 
-    await client.addLabel({ issueNumber: 42, label: 'candidate' });
+    await client.addLabels({ issueNumber: 42, labels: ['candidate', 'human-review-required'] });
     await client.createComment({ issueNumber: 1301, body: 'evidence attached' });
 
     expect(octokit.calls).toEqual([
       {
         method: 'issues.addLabels',
-        params: { owner: 'example-org', repo: 'shop-api', issue_number: 42, labels: ['candidate'] },
+        params: {
+          owner: 'example-org',
+          repo: 'shop-api',
+          issue_number: 42,
+          labels: ['candidate', 'human-review-required'],
+        },
       },
       {
         method: 'issues.createComment',

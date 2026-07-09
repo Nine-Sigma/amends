@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseCaseFile } from '../case-file/parse.js';
+import { loadFixtureCaseFileSync } from '../../tests/helpers/fixtures.js';
 import type { CaseFile } from '../case-file/types.js';
 import { classifyTier } from '../tier/classify.js';
 import { resolveAutonomy } from '../tier/resolve-autonomy.js';
@@ -9,13 +7,7 @@ import type { VerificationObservation } from '../verification/observation.js';
 import type { ComposePrBodyInput } from './compose-body.js';
 import { composePrBody } from './compose-body.js';
 
-const FIXTURES = resolve(import.meta.dirname, '../../../schema/examples');
-
-const loadCaseFile = (name: string): CaseFile => {
-  const parsed = parseCaseFile(JSON.parse(readFileSync(resolve(FIXTURES, name), 'utf8')));
-  if (!parsed.ok) throw new Error(`fixture ${name} must parse`);
-  return parsed.caseFile;
-};
+const loadCaseFile = (name: string): CaseFile => loadFixtureCaseFileSync(name);
 
 const observation: VerificationObservation = {
   runner: 'node',

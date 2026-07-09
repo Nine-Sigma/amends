@@ -67,7 +67,6 @@ describe('runPublishStage', () => {
         fix_diff_path: 'amends-out/fix.patch',
         artifact_paths: ['artifact.test.mjs'],
         usage: { input_tokens: null, output_tokens: null, estimated_usd: null, usage_source: 'unavailable' },
-        exit_code: 0,
       },
       agentIdentity: { agent: 'fake-adapter', model: 'fake-model' },
     };

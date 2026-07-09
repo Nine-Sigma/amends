@@ -17,6 +17,7 @@ import {
   missingOr,
   requireBoolean,
   requireNumber,
+  requireOneOf,
   requireRecord,
   requireString,
   requireStringArray,
@@ -64,7 +65,6 @@ const validateAdapterResult = (parent: Record<string, unknown>, errors: ParseErr
   if (!parsed.ok) {
     errors.push(...parsed.errors.map((error) => ({ ...error, path: `adapterResult.${error.path}` })));
   }
-  requireNumber(result, 'exit_code', 'adapterResult.exit_code', errors);
 };
 
 const validateAgentIdentity = (parent: Record<string, unknown>, errors: ParseError[]): void => {
@@ -117,13 +117,7 @@ const validateObservation = (
   requireBoolean(observation, 'serverProcessSpawned', `${path}.serverProcessSpawned`, errors);
   requireBoolean(observation, 'httpExercised', `${path}.httpExercised`, errors);
   requireBoolean(observation, 'browserExercised', `${path}.browserExercised`, errors);
-  const dataPath = observation['dataPath'];
-  if (dataPath !== 'fixture-only' && dataPath !== 'live-path') {
-    errors.push({
-      path: `${path}.dataPath`,
-      reason: missingOr(dataPath, "one of 'fixture-only' | 'live-path'"),
-    });
-  }
+  requireOneOf(observation, 'dataPath', `${path}.dataPath`, ['fixture-only', 'live-path'], errors);
   validateRunOutcome(observation, 'originalRun', `${path}.originalRun`, errors);
   validateRunOutcome(observation, 'patchedRun', `${path}.patchedRun`, errors);
 };
@@ -134,19 +128,18 @@ const validateGuardrailViolation = (
 ): void => {
   const violation = requireRecord(verdict, 'violation', 'verdict.violation', errors);
   if (violation === undefined) return;
-  const kind = violation['kind'];
-  if (kind === 'hard_blocked' || kind === 'invariance') {
-    requireStringArray(violation, 'paths', 'verdict.violation.paths', errors);
-    return;
-  }
+  const kind = requireOneOf(
+    violation,
+    'kind',
+    'verdict.violation.kind',
+    ['hard_blocked', 'invariance', 'unenumerable_diff'],
+    errors,
+  );
   if (kind === 'unenumerable_diff') {
     requireString(violation, 'reason', 'verdict.violation.reason', errors);
-    return;
+  } else if (kind !== undefined) {
+    requireStringArray(violation, 'paths', 'verdict.violation.paths', errors);
   }
-  errors.push({
-    path: 'verdict.violation.kind',
-    reason: missingOr(kind, "one of 'hard_blocked' | 'invariance' | 'unenumerable_diff'"),
-  });
 };
 
 const validateVerdictArm = (verdict: Record<string, unknown>, errors: ParseError[]): void => {

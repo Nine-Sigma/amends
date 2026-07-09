@@ -6,6 +6,8 @@
  */
 
 import type { CommandRunner } from '../utils/exec.js';
+import { runGitOrThrow } from '../utils/git.js';
+import type { GitContext } from '../utils/git.js';
 
 export interface BranchPushRequest {
   branch: string;
@@ -26,9 +28,9 @@ export interface PullRequestRef {
   url: string;
 }
 
-export interface LabelRequest {
+export interface LabelsRequest {
   issueNumber: number;
-  label: string;
+  labels: string[];
 }
 
 export interface CommentRequest {
@@ -39,7 +41,7 @@ export interface CommentRequest {
 export interface GitHubClient {
   createBranchAndPush(request: BranchPushRequest): Promise<void>;
   openPullRequest(request: PullRequestRequest): Promise<PullRequestRef>;
-  addLabel(request: LabelRequest): Promise<void>;
+  addLabels(request: LabelsRequest): Promise<void>;
   createComment(request: CommentRequest): Promise<void>;
 }
 
@@ -88,36 +90,27 @@ export interface OctokitGitHubClientDeps {
   timeoutMs: number;
 }
 
-const runGit = async (deps: OctokitGitHubClientDeps, args: string[]): Promise<void> => {
-  const result = await deps.runner.run({
-    command: 'git',
-    args,
-    cwd: deps.checkoutPath,
-    env: deps.env,
-    timeoutMs: deps.timeoutMs,
-  });
-  const verb = args[0] ?? 'git';
-  if (result.kind === 'timed_out') {
-    throw new Error(`git ${verb} timed out after ${String(result.timeoutMs)}ms`);
-  }
-  if (result.exitCode !== 0) {
-    throw new Error(`git ${verb} exited ${String(result.exitCode)}: ${result.stderr}`);
-  }
-};
+const gitContext = (deps: OctokitGitHubClientDeps): GitContext => ({
+  runner: deps.runner,
+  repoPath: deps.checkoutPath,
+  env: deps.env,
+  timeoutMs: deps.timeoutMs,
+});
 
 export const createOctokitGitHubClient = (deps: OctokitGitHubClientDeps): GitHubClient => ({
   createBranchAndPush: async ({ branch, commitMessage, paths }) => {
-    await runGit(deps, ['checkout', '-b', branch]);
-    await runGit(deps, ['add', '--', ...paths]);
-    await runGit(deps, ['commit', '--message', commitMessage]);
-    await runGit(deps, ['push', 'origin', branch]);
+    const context = gitContext(deps);
+    await runGitOrThrow(context, ['checkout', '-b', branch]);
+    await runGitOrThrow(context, ['add', '--', ...paths]);
+    await runGitOrThrow(context, ['commit', '--message', commitMessage]);
+    await runGitOrThrow(context, ['push', 'origin', branch]);
   },
   openPullRequest: async ({ title, body, head, base }) => {
     const { data } = await deps.octokit.rest.pulls.create({ ...deps.repo, title, body, head, base });
     return { number: data.number, url: data.html_url };
   },
-  addLabel: async ({ issueNumber, label }) => {
-    await deps.octokit.rest.issues.addLabels({ ...deps.repo, issue_number: issueNumber, labels: [label] });
+  addLabels: async ({ issueNumber, labels }) => {
+    await deps.octokit.rest.issues.addLabels({ ...deps.repo, issue_number: issueNumber, labels });
   },
   createComment: async ({ issueNumber, body }) => {
     await deps.octokit.rest.issues.createComment({ ...deps.repo, issue_number: issueNumber, body });

@@ -43,7 +43,7 @@ describe('openFixPr', () => {
         base: 'main',
       },
     ]);
-    expect(github.labels).toEqual([{ issueNumber: 101, label: CANDIDATE_LABEL }]);
+    expect(github.labels).toEqual([{ issueNumber: 101, labels: [CANDIDATE_LABEL] }]);
     expect(result.kind).toBe('pr_opened');
     if (result.kind !== 'pr_opened') throw new Error('unreachable');
     expect(result.autoMergeEligible).toBe(false);
@@ -114,7 +114,7 @@ describe('openFixPr', () => {
       github,
     );
 
-    expect(github.labels).toEqual([{ issueNumber: 101, label: HUMAN_REVIEW_LABEL }]);
+    expect(github.labels).toEqual([{ issueNumber: 101, labels: [HUMAN_REVIEW_LABEL] }]);
     const body = github.pullRequests[0]?.body ?? '';
     expect(body).toContain('Human review required');
     expect(body).toContain('package.json');
@@ -166,6 +166,6 @@ describe('openFixPr', () => {
       github,
     );
 
-    expect(github.labels.map((label) => label.label)).toEqual([CANDIDATE_LABEL, HUMAN_REVIEW_LABEL]);
+    expect(github.labels).toEqual([{ issueNumber: 101, labels: [CANDIDATE_LABEL, HUMAN_REVIEW_LABEL] }]);
   });
 });

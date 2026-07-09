@@ -206,14 +206,19 @@ const dispatchFix = async (inputs: ActionInputs, env: EnvMap): Promise<DispatchO
 };
 
 const dispatchVerify = async (inputs: ActionInputs, env: EnvMap): Promise<DispatchOutcome> => {
+  const [caseFile, fixBundle, config] = await Promise.all([
+    loadCaseFileAt(inputs.caseFilePath),
+    loadFixBundleAt(inputs.fixBundlePath),
+    loadConfigAt(inputs.configPath),
+  ]);
   const bundle = await runVerifyStage(
     {
-      caseFile: await loadCaseFileAt(inputs.caseFilePath),
-      fixBundle: await loadFixBundleAt(inputs.fixBundlePath),
+      caseFile,
+      fixBundle,
       repoPath: inputs.checkoutPath,
       env: buildZeroSecretEnv(env),
       timeoutMs: inputs.timeoutMs,
-      config: await loadConfigAt(inputs.configPath),
+      config,
       bundlePath: inputs.verifyBundlePath,
     },
     { runner: createCommandRunner(), files: createFileWriter() },
@@ -256,12 +261,18 @@ const dispatchPublish = async (inputs: ActionInputs, env: EnvMap): Promise<Dispa
     timeoutMs: inputs.timeoutMs,
   });
   const runLink = `${env['GITHUB_SERVER_URL'] ?? 'https://github.com'}/${repoFull}/actions/runs/${env['GITHUB_RUN_ID'] ?? 'unknown'}`;
+  const [caseFile, fixBundle, verifyBundle, config] = await Promise.all([
+    loadCaseFileAt(inputs.caseFilePath),
+    loadFixBundleAt(inputs.fixBundlePath),
+    loadVerifyBundleAt(inputs.verifyBundlePath),
+    loadConfigAt(inputs.configPath),
+  ]);
   const result = await runPublishStage(
     {
-      caseFile: await loadCaseFileAt(inputs.caseFilePath),
-      fixBundle: await loadFixBundleAt(inputs.fixBundlePath),
-      verifyBundle: await loadVerifyBundleAt(inputs.verifyBundlePath),
-      config: await loadConfigAt(inputs.configPath),
+      caseFile,
+      fixBundle,
+      verifyBundle,
+      config,
       repoPath: inputs.checkoutPath,
       base: inputs.base,
       // Both runs execute inside the single verify job, so they share one run link.

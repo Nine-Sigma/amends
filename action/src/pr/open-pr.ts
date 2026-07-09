@@ -103,8 +103,8 @@ export const openFixPr = async (
   if (request.classification.kind === 'review_required') {
     labels.push(HUMAN_REVIEW_LABEL);
   }
-  for (const label of labels) {
-    await client.addLabel({ issueNumber: pr.number, label });
+  if (labels.length > 0) {
+    await client.addLabels({ issueNumber: pr.number, labels });
   }
 
   const autoMergeEligible =

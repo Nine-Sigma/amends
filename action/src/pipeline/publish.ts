@@ -143,11 +143,12 @@ export async function runPublishStage(
 
   const tier = classifyTier(verdict.observation);
   const tierLevel = tier.tier;
-  const resolution = resolveAutonomy(request.config.mode, tierLevel);
-  const autonomy = resolution.autonomy;
-  if (tierLevel === 0 || autonomy === 'diagnostic_only') {
+  if (tierLevel === 0) {
     return { kind: 'evidence_gate_unmet', missing: tier.reasons };
   }
+  // tierLevel is now 1 | 2, so the resolution's type excludes diagnostic_only.
+  const resolution = resolveAutonomy(request.config.mode, tierLevel);
+  const autonomy = resolution.autonomy;
 
   const revision = request.caseFile.release.revision;
   if (request.caseFile.release.resolution.status === 'unresolved' || revision === null) {

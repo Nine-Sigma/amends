@@ -90,6 +90,9 @@ function checkGuardrails(
   return undefined;
 }
 
+/** Test-run output is only ever distilled into a short failure signature — retaining more is wasted memory. */
+const TEST_RUN_CAPTURE_BYTES = 16_384;
+
 const runCommand = (
   request: CounterfactualRequest,
   deps: CounterfactualDeps,
@@ -102,6 +105,7 @@ const runCommand = (
     cwd: request.repoPath,
     env: { ...request.env },
     timeoutMs: request.timeoutMs,
+    maxCapturedBytes: TEST_RUN_CAPTURE_BYTES,
   });
 
 const resetToOriginal = (

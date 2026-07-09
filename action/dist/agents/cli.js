@@ -24,6 +24,20 @@ var commandFailureSignature = (result) => {
   const output = (result.stderr.trim() || result.stdout.trim()).slice(0, MAX_SIGNATURE_OUTPUT);
   return `exit ${result.exitCode}: ${output}`;
 };
+var createCapture = (cap) => {
+  const chunks = [];
+  let retained = 0;
+  return {
+    push: (chunk) => {
+      if (retained >= cap) return;
+      const room = cap - retained;
+      const kept = chunk.length > room ? chunk.subarray(0, room) : chunk;
+      chunks.push(kept);
+      retained += kept.length;
+    },
+    text: () => Buffer.concat(chunks).toString("utf8")
+  };
+};
 var createCommandRunner = () => ({
   run: (request) => new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(request.command, request.args, {
@@ -31,15 +45,20 @@ var createCommandRunner = () => ({
       env: request.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
-    let stdout = "";
-    let stderr = "";
+    const cap = request.maxCapturedBytes ?? Number.MAX_SAFE_INTEGER;
+    const stdout = createCapture(cap);
+    const stderr = createCapture(cap);
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
     }, request.timeoutMs);
-    child.stdout.on("data", (chunk) => stdout += chunk.toString());
-    child.stderr.on("data", (chunk) => stderr += chunk.toString());
+    child.stdout.on("data", (chunk) => {
+      stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr.push(chunk);
+    });
     child.on("error", (error) => {
       clearTimeout(timer);
       rejectPromise(error);
@@ -47,7 +66,7 @@ var createCommandRunner = () => ({
     child.on("close", (exitCode) => {
       clearTimeout(timer);
       resolvePromise(
-        timedOut ? { kind: "timed_out", timeoutMs: request.timeoutMs } : { kind: "completed", exitCode: exitCode ?? 1, stdout, stderr }
+        timedOut ? { kind: "timed_out", timeoutMs: request.timeoutMs } : { kind: "completed", exitCode: exitCode ?? 1, stdout: stdout.text(), stderr: stderr.text() }
       );
     });
   })
@@ -69,6 +88,25 @@ var createFileReader = () => ({
 
 // agents/claude-code.ts
 import { join } from "node:path";
+
+// src/utils/git.ts
+var runGitOrThrow = async (context, args) => {
+  const result = await context.runner.run({
+    command: "git",
+    args: [...args],
+    cwd: context.repoPath,
+    env: { ...context.env },
+    timeoutMs: context.timeoutMs
+  });
+  if (result.kind !== "completed" || result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed in ${context.repoPath}: ${commandFailureSignature(result)}`
+    );
+  }
+  return result.stdout;
+};
+
+// agents/claude-code.ts
 var CLAUDE_CLI_COMMAND = "claude";
 var ADAPTER_SCRATCH_DIR = ".amends";
 var FIX_DIFF_OUTPUT_PATH = ".amends/fix.diff";
@@ -119,19 +157,15 @@ var claudeReportedError = (output) => {
   const result = typeof output["result"] === "string" ? output["result"] : "";
   return `${subtype ?? "unknown error"}: ${result}`.trim();
 };
-var runGit = async (deps, request, args) => {
-  const result = await deps.runner.run({
-    command: "git",
-    args,
-    cwd: request.input.checkout_path,
+var runGit = (deps, request, args) => runGitOrThrow(
+  {
+    runner: deps.runner,
+    repoPath: request.input.checkout_path,
     env: request.env,
     timeoutMs: request.timeoutMs
-  });
-  if (result.kind === "timed_out" || result.exitCode !== 0) {
-    throw new Error(`git ${args[0] ?? ""} failed: ${commandFailureSignature(result)}`);
-  }
-  return result.stdout;
-};
+  },
+  args
+);
 var parsePorcelain = (stdout) => stdout.split("\n").filter((line) => line.length > 3).map((line) => {
   const rawPath = line.slice(3);
   const renameTarget = rawPath.split(" -> ")[1];

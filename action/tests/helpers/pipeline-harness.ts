@@ -6,9 +6,8 @@
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
-import { parseCaseFile } from '../../src/case-file/parse.js';
 import type { CaseFile } from '../../src/case-file/types.js';
 import { loadConfig } from '../../src/config/load-config.js';
 import type { AmendsConfig } from '../../src/config/types.js';
@@ -24,24 +23,20 @@ import type { CommandRequest, CommandRunner } from '../../src/utils/exec.js';
 import { createFileReader, createFileWriter } from '../../src/utils/fs.js';
 import { buildZeroSecretEnv } from '../../src/utils/env.js';
 import type { FakeAdapterScenario } from './fake-adapter.js';
+import { FIXTURES_DIR, loadFixtureCaseFileSync } from './fixtures.js';
 import { stageScenarioAdapter } from './scenario-adapter.js';
 import { createTempGitRepo } from './temp-git.js';
 import type { TempGitRepo } from './temp-git.js';
 
-export const FIXTURES_DIR = resolve(import.meta.dirname, '../../../schema/examples');
-const TEMPLATE_PATH = resolve(import.meta.dirname, '../../prompts/fix-pass.md');
+const TEMPLATE_PATH = join(import.meta.dirname, '../../prompts/fix-pass.md');
 
 export const PIPELINE_RUN_LINKS = {
   originalRun: 'https://github.example/example-org/shop-api/actions/runs/9001',
   patchedRun: 'https://github.example/example-org/shop-api/actions/runs/9002',
 };
 
-export const loadFixtureCaseFile = async (fixtureName: string): Promise<CaseFile> => {
-  const raw: unknown = JSON.parse(await readFile(join(FIXTURES_DIR, fixtureName), 'utf8'));
-  const parsed = parseCaseFile(raw);
-  if (!parsed.ok) throw new Error(`fixture ${fixtureName} must parse`);
-  return parsed.caseFile;
-};
+export const loadFixtureCaseFile = (fixtureName: string): Promise<CaseFile> =>
+  Promise.resolve(loadFixtureCaseFileSync(fixtureName));
 
 /**
  * Clone bound to the temp repo: release.revision points at the planted bug

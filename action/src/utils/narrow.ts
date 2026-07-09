@@ -63,6 +63,23 @@ export const requireStringArray = (
   }
 };
 
+/** Membership check for closed string unions; open registries (§5.1) must NOT use this — they stay requireString. */
+export const requireOneOf = (
+  parent: Record<string, unknown>,
+  key: string,
+  path: string,
+  allowed: readonly string[],
+  errors: ParseError[],
+): string | undefined => {
+  const value = parent[key];
+  if (typeof value === 'string' && allowed.includes(value)) return value;
+  errors.push({
+    path,
+    reason: missingOr(value, `one of ${allowed.map((member) => `'${member}'`).join(' | ')}`),
+  });
+  return undefined;
+};
+
 export const requireRecord = (
   parent: Record<string, unknown>,
   key: string,

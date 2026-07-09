@@ -53,7 +53,7 @@ describe('runAdapter', () => {
     });
   });
 
-  it('accepts a conformant result and records the observed exit code', async () => {
+  it('accepts a conformant result', async () => {
     const outcome = await runAdapter(invocation(), stdoutRunner(JSON.stringify(conformantResult())));
 
     expect(outcome.kind).toBe('ok');
@@ -61,7 +61,6 @@ describe('runAdapter', () => {
     expect(outcome.result.branch_ref).toBe('amends/fix-abc123');
     expect(outcome.result.fix_diff_path).toBe('amends-out/fix.patch');
     expect(outcome.result.artifact_paths).toEqual(['src/checkout/total.counterfactual.test.ts']);
-    expect(outcome.result.exit_code).toBe(0);
   });
 
   it('runs in the checkout with the explicit env map, timeout, and the serialized input transport', async () => {
