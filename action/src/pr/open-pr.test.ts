@@ -19,6 +19,7 @@ const baseRequest = (): OpenPrRequest => ({
   base: 'main',
   title: 'fix: null customer on pay route',
   body: 'validated, evidence-backed fix body',
+  stagePaths: ['src/pay.js', 'artifact.test.mjs'],
 });
 
 describe('openFixPr', () => {
@@ -28,7 +29,11 @@ describe('openFixPr', () => {
     const result = await openFixPr(baseRequest(), github);
 
     expect(github.branchPushes).toEqual([
-      { branch: 'amends/fix-1301', commitMessage: 'fix: null customer on pay route' },
+      {
+        branch: 'amends/fix-1301',
+        commitMessage: 'fix: null customer on pay route',
+        paths: ['src/pay.js', 'artifact.test.mjs'],
+      },
     ]);
     expect(github.pullRequests).toEqual([
       {

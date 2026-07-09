@@ -5,13 +5,21 @@
 # - NEVER use `pull_request_target` on untrusted code paths. Amends-authored
 #   PRs must not be able to trigger privileged workflows automatically —
 #   `workflow_dispatch` is the only Phase-1 trigger.
-# - Model secrets reach ONLY the fix job. The verify job runs agent-authored
-#   tests with `permissions: {}` and no secrets; the action additionally
-#   enforces an explicit zero-secret env allowlist in code. Runner-level
-#   network isolation varies by runner and is NOT claimed here — harden the
-#   runner itself if you need a network sandbox.
+# - Model secrets reach ONLY the fix job, and reach the adapter child only
+#   through the explicit `adapter-secret-env` grant. The verify job runs
+#   agent-authored tests with `permissions: {}` and no secrets; the action
+#   additionally enforces an explicit zero-secret env allowlist in code.
+#   Runner-level network isolation varies by runner and is NOT claimed here —
+#   harden the runner itself if you need a network sandbox.
 # - The publish job holds the only write scopes, and runs no agent-authored
 #   code: it applies the already-validated diff and opens the PR.
+# - Handoff bundles live under ${{ runner.temp }}, outside the checkout, so
+#   they can never be swept into the fix branch (§9).
+#
+# CHECKOUT DEPTH: every job checks out with fetch-depth: 0 because all three
+# stages check out the incident's release.revision, which is usually not the
+# trigger HEAD. A release.revision unreachable from any ref (e.g. force-pushed
+# away) cannot be verified at all.
 name: amends-fix
 
 on:
@@ -28,19 +36,23 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: amends/action@v0 # pin to a released ref in real use
         with:
           stage: fix
           case-file: ${{ inputs.case-file }}
           adapter-command: claude-code-adapter
+          adapter-secret-env: ANTHROPIC_API_KEY
           model: claude-sonnet-5
+          fix-bundle: ${{ runner.temp }}/amends/fix-bundle.json
         env:
           # Model secrets are exposed ONLY to this job.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: amends-fix-bundle
-          path: amends-out/fix-bundle.json
+          path: ${{ runner.temp }}/amends/fix-bundle.json
 
   verify:
     needs: fix
@@ -50,18 +62,22 @@ jobs:
     permissions: {}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: amends-fix-bundle
-          path: amends-out
+          path: ${{ runner.temp }}/amends
       - uses: amends/action@v0
         with:
           stage: verify
           case-file: ${{ inputs.case-file }}
+          fix-bundle: ${{ runner.temp }}/amends/fix-bundle.json
+          verify-bundle: ${{ runner.temp }}/amends/verify-bundle.json
       - uses: actions/upload-artifact@v4
         with:
           name: amends-verify-bundle
-          path: amends-out/verify-bundle.json
+          path: ${{ runner.temp }}/amends/verify-bundle.json
 
   publish:
     needs: verify
@@ -72,17 +88,21 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: amends-fix-bundle
-          path: amends-out
+          path: ${{ runner.temp }}/amends
       - uses: actions/download-artifact@v4
         with:
           name: amends-verify-bundle
-          path: amends-out
+          path: ${{ runner.temp }}/amends
       - uses: amends/action@v0
         with:
           stage: publish
           case-file: ${{ inputs.case-file }}
+          fix-bundle: ${{ runner.temp }}/amends/fix-bundle.json
+          verify-bundle: ${{ runner.temp }}/amends/verify-bundle.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -30,6 +30,8 @@ export interface OpenPrRequest {
   base: string;
   title: string;
   body: string;
+  /** Validated content only: git-enumerated fix-diff paths plus artifact keys. */
+  stagePaths: string[];
 }
 
 export type OpenPrResult =
@@ -73,7 +75,11 @@ export const openFixPr = async (
       ? `${request.body}\n\n${humanReviewSection(request.classification.paths)}`
       : request.body;
 
-  await client.createBranchAndPush({ branch: request.branch, commitMessage: request.title });
+  await client.createBranchAndPush({
+    branch: request.branch,
+    commitMessage: request.title,
+    paths: request.stagePaths,
+  });
   const pr = await client.openPullRequest({
     title: request.title,
     body,

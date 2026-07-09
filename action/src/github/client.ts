@@ -10,6 +10,8 @@ import type { CommandRunner } from '../utils/exec.js';
 export interface BranchPushRequest {
   branch: string;
   commitMessage: string;
+  /** Exactly what gets staged (`git add -- <paths>`) — never `--all`, which would sweep handoff bundles into the PR (§9). */
+  paths: string[];
 }
 
 export interface PullRequestRequest {
@@ -104,9 +106,9 @@ const runGit = async (deps: OctokitGitHubClientDeps, args: string[]): Promise<vo
 };
 
 export const createOctokitGitHubClient = (deps: OctokitGitHubClientDeps): GitHubClient => ({
-  createBranchAndPush: async ({ branch, commitMessage }) => {
+  createBranchAndPush: async ({ branch, commitMessage, paths }) => {
     await runGit(deps, ['checkout', '-b', branch]);
-    await runGit(deps, ['add', '--all']);
+    await runGit(deps, ['add', '--', ...paths]);
     await runGit(deps, ['commit', '--message', commitMessage]);
     await runGit(deps, ['push', 'origin', branch]);
   },

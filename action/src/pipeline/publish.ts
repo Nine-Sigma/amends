@@ -169,6 +169,9 @@ export async function runPublishStage(
       base: request.base,
       title: prTitle(request.caseFile),
       body,
+      stagePaths: [
+        ...new Set([...recheck.paths, ...Object.keys(request.fixBundle.artifactFiles)]),
+      ],
     },
     deps.github,
   );
