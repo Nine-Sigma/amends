@@ -44,6 +44,12 @@ inputs:
   adapter-args:
     description: 'Whitespace-separated extra arguments for the adapter command.'
     required: false
+  adapter-secret-env:
+    description: >-
+      Comma-separated env var NAMES forwarded from the job env to the adapter
+      child (e.g. 'ANTHROPIC_API_KEY'). Everything else is stripped to a
+      non-secret basics allowlist; GITHUB_TOKEN is never forwarded implicitly.
+    required: false
   model:
     description: 'Model identifier passed to the adapter as model_config.model. Required for stage: fix.'
     required: false

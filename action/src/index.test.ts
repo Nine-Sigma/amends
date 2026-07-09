@@ -71,6 +71,26 @@ describe('readActionInputs', () => {
     expect(verifyResult.ok).toBe(true);
   });
 
+  it('parses adapter-secret-env as a comma-separated allowlist, defaulting empty', () => {
+    const withSecrets = readActionInputs({
+      ...fixEnv(),
+      'INPUT_ADAPTER-SECRET-ENV': 'ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN',
+    });
+    expect(withSecrets.ok).toBe(true);
+    if (withSecrets.ok) {
+      expect(withSecrets.inputs.adapterSecretEnv).toEqual([
+        'ANTHROPIC_API_KEY',
+        'CLAUDE_CODE_OAUTH_TOKEN',
+      ]);
+    }
+
+    const without = readActionInputs(fixEnv());
+    expect(without.ok).toBe(true);
+    if (without.ok) {
+      expect(without.inputs.adapterSecretEnv).toEqual([]);
+    }
+  });
+
   it('rejects a non-numeric timeout-ms', () => {
     const result = readActionInputs({ ...fixEnv(), 'INPUT_TIMEOUT-MS': 'soon' });
     expect(result.ok).toBe(false);

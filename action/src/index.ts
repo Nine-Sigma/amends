@@ -21,6 +21,7 @@ import { runFixStage } from './pipeline/fix.js';
 import { runPublishStage } from './pipeline/publish.js';
 import { summarizePipelineResult } from './pipeline/result.js';
 import { runVerifyStage } from './pipeline/verify.js';
+import { buildFixStageEnv } from './utils/env.js';
 import { createCommandRunner } from './utils/exec.js';
 import { createFileReader, createFileWriter } from './utils/fs.js';
 import type { ParseError } from './utils/narrow.js';
@@ -40,6 +41,8 @@ export interface ActionInputs {
   promptPath: string;
   adapterCommand: string;
   adapterArgs: string[];
+  /** Env var names (never values) the workflow explicitly grants to the adapter child. */
+  adapterSecretEnv: string[];
   model: string;
   base: string;
   checkoutPath: string;
@@ -102,6 +105,10 @@ export const readActionInputs = (env: EnvMap): ReadInputsResult => {
       promptPath: inWorkspace(input('prompt-path') ?? 'amends-out/prompt.md'),
       adapterCommand,
       adapterArgs: (input('adapter-args') ?? '').split(/\s+/).filter((arg) => arg !== ''),
+      adapterSecretEnv: (input('adapter-secret-env') ?? '')
+        .split(',')
+        .map((key) => key.trim())
+        .filter((key) => key !== ''),
       model,
       base: input('base') ?? 'main',
       checkoutPath: workspace,
@@ -151,14 +158,6 @@ const loadVerifyBundleAt = async (path: string): Promise<VerifyBundle> => {
   return parsed.bundle;
 };
 
-const definedEnv = (env: EnvMap): Record<string, string> => {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) out[key] = value;
-  }
-  return out;
-};
-
 interface DispatchOutcome {
   ok: boolean;
   result: Record<string, unknown>;
@@ -178,8 +177,8 @@ const dispatchFix = async (inputs: ActionInputs, env: EnvMap): Promise<DispatchO
           case_file_path: inputs.caseFilePath,
           model_config: { model: inputs.model },
         },
-        // The fix job legitimately holds model secrets (§8.1); verify never does.
-        env: definedEnv(env),
+        // Model secrets reach the fix job only via the explicit adapter-secret-env grant (§8.1).
+        env: buildFixStageEnv(env, inputs.adapterSecretEnv),
         timeoutMs: inputs.timeoutMs,
       },
       promptTemplate: template,
