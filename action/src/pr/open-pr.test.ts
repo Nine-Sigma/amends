@@ -49,6 +49,24 @@ describe('openFixPr', () => {
     expect(result.autoMergeEligible).toBe(false);
   });
 
+  it('refuses issue_only for a non-github_issue work item kind, even with a numeric id', async () => {
+    const github = createRecordingGitHub();
+    const jiraItem: WorkItem = {
+      kind: 'jira_ticket',
+      id: '1301',
+      url: 'https://jira.example.com/browse/SHOP-1301',
+    };
+
+    const result = await openFixPr(
+      { ...baseRequest(), autonomy: 'issue_only', workItem: jiraItem },
+      github,
+    );
+
+    expect(result.kind).toBe('invalid_work_item');
+    expect(github.comments).toEqual([]);
+    expect(github.branchPushes).toEqual([]);
+  });
+
   it('does not label Tier 2 normal PRs as candidate', async () => {
     const github = createRecordingGitHub();
 

@@ -51,6 +51,15 @@ const commentOnWorkItem = async (
   request: OpenPrRequest,
   client: GitHubClient,
 ): Promise<OpenPrResult> => {
+  // kind is an open registry (§5.1); equality on the conventional value is
+  // deliberately fail-closed — a jira_ticket id must never address a
+  // coincidentally-numbered GitHub issue. Future GitHub-ish kinds opt in here.
+  if (request.workItem.kind !== 'github_issue') {
+    return {
+      kind: 'invalid_work_item',
+      reason: `work_item.kind '${request.workItem.kind}' is not a GitHub issue`,
+    };
+  }
   if (!/^\d+$/.test(request.workItem.id)) {
     return {
       kind: 'invalid_work_item',

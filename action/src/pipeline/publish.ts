@@ -76,8 +76,16 @@ async function materializeFix(
   }
 }
 
-const prTitle = (caseFile: CaseFile): string =>
-  `Amends: evidence-backed fix for ${caseFile.work_item.kind} ${caseFile.work_item.id}`;
+const TITLE_FIELD_MAX = 64;
+
+/** work_item fields are case-file content (§8.1) — length-capped and stripped of control/markup characters before a PR surface. */
+const titleField = (value: string): string => {
+  const cleaned = value.replaceAll(/[^\p{L}\p{N} ._/@#:-]/gu, '_');
+  return cleaned.length > TITLE_FIELD_MAX ? cleaned.slice(0, TITLE_FIELD_MAX) : cleaned;
+};
+
+export const composePrTitle = (caseFile: CaseFile): string =>
+  `Amends: evidence-backed fix for ${titleField(caseFile.work_item.kind)} ${titleField(caseFile.work_item.id)}`;
 
 type GuardrailRecheck =
   | { kind: 'refused'; result: PublishStageResult }
@@ -179,7 +187,7 @@ export async function runPublishStage(
       workItem: request.caseFile.work_item,
       branch,
       base: request.base,
-      title: prTitle(request.caseFile),
+      title: composePrTitle(request.caseFile),
       body,
       stagePaths: [
         ...new Set([...recheck.paths, ...Object.keys(request.fixBundle.artifactFiles)]),

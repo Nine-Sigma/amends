@@ -14,14 +14,35 @@ import {
   PIPELINE_RUN_LINKS,
 } from '../../tests/helpers/pipeline-harness.js';
 import type { PipelineHarness } from '../../tests/helpers/pipeline-harness.js';
+import type { CaseFile } from '../case-file/types.js';
 import { createCommandRunner } from '../utils/exec.js';
 import { createFileWriter } from '../utils/fs.js';
 import type { FixBundle } from './bundle.js';
-import { runPublishStage } from './publish.js';
+import { composePrTitle, runPublishStage } from './publish.js';
 
 const execFileAsync = promisify(execFile);
 
 const INTEGRATION_TIMEOUT = 60_000;
+
+describe('composePrTitle', () => {
+  it('caps and sanitizes untrusted work_item fields before they reach the PR title', async () => {
+    const base = await loadFixtureCaseFile('node-api-500.json');
+    const hostile: CaseFile = {
+      ...base,
+      work_item: {
+        ...base.work_item,
+        kind: 'github_issue\n<script>alert(1)</script>',
+        id: 'x'.repeat(200),
+      },
+    };
+
+    const title = composePrTitle(hostile);
+
+    expect(title).not.toContain('<');
+    expect(title).not.toContain('\n');
+    expect(title.length).toBeLessThanOrEqual('Amends: evidence-backed fix for '.length + 64 * 2 + 1);
+  });
+});
 
 describe('runPublishStage', () => {
   let harness: PipelineHarness;
