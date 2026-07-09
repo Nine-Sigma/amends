@@ -69,13 +69,20 @@ describe('classifyTier', () => {
     expect(result.reasons).toContain('api_replay_against_spawned_server');
   });
 
-  it('classifies an integration/E2E runner as Tier 2', () => {
+  it('an E2E runner with an observed browser signal classifies Tier 2 via the signal, not the name', () => {
     const result = classifyTier(
       baseObservation({ runner: 'playwright', browserExercised: true }),
     );
 
     expect(result.tier).toBe(2);
-    expect(result.reasons).toContain('e2e_runner_exercised');
+    expect(result.reasons).toEqual(['browser_context_exercised']);
+  });
+
+  it('an E2E runner name alone, with no observed signal, classifies Tier 1 — claims never set autonomy', () => {
+    const result = classifyTier(baseObservation({ runner: 'playwright' }));
+
+    expect(result.tier).toBe(1);
+    expect(result.reasons).not.toContain('e2e_runner_exercised');
   });
 
   it('HTTP exercise without a spawned server is individually insufficient — Tier 1', () => {

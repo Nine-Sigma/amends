@@ -14,8 +14,12 @@ export interface TierClassification {
  */
 const BUILD_TYPECHECK_RUNNERS = new Set(['tsc', 'typecheck', 'build', 'compile']);
 
-const E2E_RUNNERS = new Set(['playwright', 'cypress', 'webdriverio']);
-
+/**
+ * Tier 2 keys on observed signals only (PRD §7.1) — never on the runner name,
+ * which is repo-owner-claimed case-file text (§8.2). Phase 1 instruments no
+ * browser/HTTP/server signal, so Tier 2 is intentionally unreachable until
+ * real instrumentation exists.
+ */
 const strongTier2Signals = (observation: VerificationObservation): string[] => {
   const signals: string[] = [];
   if (observation.browserExercised) {
@@ -23,9 +27,6 @@ const strongTier2Signals = (observation: VerificationObservation): string[] => {
   }
   if (observation.httpExercised && observation.serverProcessSpawned) {
     signals.push('api_replay_against_spawned_server');
-  }
-  if (E2E_RUNNERS.has(observation.runner)) {
-    signals.push('e2e_runner_exercised');
   }
   return signals;
 };
