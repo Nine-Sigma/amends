@@ -174,17 +174,24 @@ describe('gate-refusal paths (integration, in-process, no network)', () => {
     'unresolved release exits release_unresolved before any verification run, zero GitHub writes',
     { timeout: INTEGRATION_TIMEOUT },
     async () => {
+      // The fix bundle is produced under a resolved case file; the unresolved
+      // one reaches verify + publish, which must both refuse structurally.
+      const resolved = await runnableCaseFile();
+      const fixBundle = await harness.runFix('happy-tier1', resolved);
       const caseFile = await loadFixtureCaseFile('node-api-500-unresolved.json');
       const verify = recordingRunner();
-      const { verdict, result, github, publishCalls } = await drive(caseFile, 'happy-tier1', verify.runner);
+      const verifyBundle = await harness.runVerify(caseFile, fixBundle, verify.runner);
+      const github = createRecordingGitHub();
+      const publish = recordingRunner();
+      const result = await harness.runPublish(caseFile, fixBundle, verifyBundle, github, publish.runner);
 
       expect(verify.calls).toHaveLength(0);
-      expect(verdict.kind).toBe('release_unresolved');
+      expect(verifyBundle.verdict.kind).toBe('release_unresolved');
       expect(result.kind).toBe('release_unresolved');
       if (result.kind === 'release_unresolved') {
         expect(result.declared).toBe(caseFile.release.declared);
       }
-      expect(publishCalls).toHaveLength(0);
+      expect(publish.calls).toHaveLength(0);
       expectZeroGitHubWrites(github);
     },
   );

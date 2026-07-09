@@ -14,6 +14,7 @@ import { assemblePrompt } from '../prompt/assemble.js';
 import type { CommandRunner } from '../utils/exec.js';
 import { isCheckoutContainedPath } from '../utils/fs.js';
 import type { FileReader, FileWriter } from '../utils/fs.js';
+import { checkoutRevision } from '../utils/git.js';
 import type { ParseError } from '../utils/narrow.js';
 import type { FixBundle } from './bundle.js';
 
@@ -39,7 +40,9 @@ export type FixStageResult =
   | { kind: 'fix_complete'; bundle: FixBundle }
   | { kind: 'prompt_rejected'; errors: ParseError[] }
   | { kind: 'adapter_failed'; failure: AdapterFailure }
-  | { kind: 'declared_path_rejected'; path: string; reason: string };
+  | { kind: 'declared_path_rejected'; path: string; reason: string }
+  /** §5.4: an unresolved release excludes every code-change path — the adapter never runs. */
+  | { kind: 'release_unresolved'; declared: string };
 
 type DeclaredRead = { ok: true; content: string } | { ok: false; reason: string };
 
@@ -63,6 +66,22 @@ export async function runFixStage(
   request: FixStageRequest,
   deps: FixStageDeps,
 ): Promise<FixStageResult> {
+  const revision = request.caseFile.release.revision;
+  if (request.caseFile.release.resolution.status === 'unresolved' || revision === null) {
+    return { kind: 'release_unresolved', declared: request.caseFile.release.declared };
+  }
+  // The adapter must produce its diff against the incident revision — the same
+  // base verify re-applies it to and publish branches from (1.7).
+  await checkoutRevision(
+    {
+      runner: deps.runner,
+      repoPath: request.invocation.input.checkout_path,
+      env: request.invocation.env,
+      timeoutMs: request.invocation.timeoutMs,
+    },
+    revision,
+  );
+
   const assembled = assemblePrompt(request.caseFile, request.promptTemplate);
   if (!assembled.ok) return { kind: 'prompt_rejected', errors: assembled.errors };
   await deps.files.write(request.promptPath, assembled.prompt);

@@ -76,10 +76,12 @@ export const stageScenarioAdapter = async (
     await mkdir(dirname(absolute), { recursive: true });
     await writeFile(absolute, content, 'utf8');
   };
-  await writeInRepo(FIX_DIFF_PATH, fixDiff);
-  for (const [path, content] of Object.entries(artifactFiles)) {
-    await writeInRepo(path, content);
-  }
+  const writeAdapterOutputs = async (): Promise<void> => {
+    await writeInRepo(FIX_DIFF_PATH, fixDiff);
+    for (const [path, content] of Object.entries(artifactFiles)) {
+      await writeInRepo(path, content);
+    }
+  };
 
   const branchRef = `amends/fix-${scenario}`;
   const resultJson = JSON.stringify({
@@ -90,7 +92,16 @@ export const stageScenarioAdapter = async (
   });
   return {
     adapterRunner: {
-      run: () => Promise.resolve({ kind: 'completed', exitCode: 0, stdout: resultJson, stderr: '' }),
+      // Outputs land when the "adapter" runs (like a real one), surviving the
+      // fix stage's release-revision checkout + clean that precedes it. git
+      // commands the stage issues through this runner are acknowledged empty.
+      run: async (request) => {
+        if (request.command === 'git') {
+          return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+        }
+        await writeAdapterOutputs();
+        return { kind: 'completed', exitCode: 0, stdout: resultJson, stderr: '' };
+      },
     },
     branchRef,
     fixDiff,

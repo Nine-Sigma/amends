@@ -1,9 +1,10 @@
 /**
  * PUBLISH sub-stage: gate on the verify verdict, classify evidence
- * mechanically (US-005), materialize the validated fix in a fresh checkout,
- * and open the PR / comment through the narrow GitHub client (US-009).
- * Precondition: the working tree is a clean checkout at the original
- * revision (a fresh job checkout in the reference workflow).
+ * mechanically (US-005), check out the incident revision (the base the diff
+ * was validated against — the PR head may trail the base branch by however
+ * far HEAD has moved; rebasing would invalidate the verification), then
+ * materialize the validated fix and open the PR / comment through the narrow
+ * GitHub client (US-009).
  */
 
 import { join } from 'node:path';
@@ -21,6 +22,7 @@ import { resolveAutonomy } from '../tier/resolve-autonomy.js';
 import { applyFixDiff, enumerateFixDiffPaths } from '../utils/apply-fix-diff.js';
 import type { CommandRunner } from '../utils/exec.js';
 import type { FileWriter } from '../utils/fs.js';
+import { checkoutRevision } from '../utils/git.js';
 import type { FixBundle, VerifyBundle } from './bundle.js';
 import type { PipelineResult } from './result.js';
 
@@ -65,7 +67,8 @@ async function materializeFix(
     deps.files,
   );
   if (!apply.applied) {
-    // Verify proved this diff applies; a failure here is an environment fault.
+    // Verify proved this diff applies at release.revision, which the caller
+    // just checked out — a failure here is an environment fault.
     throw new Error(`fix diff did not apply in the publish checkout: ${apply.failureSignature}`);
   }
   for (const [path, content] of Object.entries(request.fixBundle.artifactFiles)) {
@@ -137,6 +140,15 @@ export async function runPublishStage(
   if (tierLevel === 0 || autonomy === 'diagnostic_only') {
     return { kind: 'evidence_gate_unmet', missing: tier.reasons };
   }
+
+  const revision = request.caseFile.release.revision;
+  if (request.caseFile.release.resolution.status === 'unresolved' || revision === null) {
+    return { kind: 'release_unresolved', declared: request.caseFile.release.declared };
+  }
+  await checkoutRevision(
+    { runner: deps.runner, repoPath: request.repoPath, env: request.env, timeoutMs: request.timeoutMs },
+    revision,
+  );
 
   const recheck = await recheckGuardrails(request, deps);
   if (recheck.kind === 'refused') return recheck.result;

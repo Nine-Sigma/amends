@@ -18,6 +18,7 @@ import type { ApplyFixDiffResult } from '../utils/apply-fix-diff.js';
 import { commandFailureSignature } from '../utils/exec.js';
 import type { CommandResult, CommandRunner } from '../utils/exec.js';
 import type { FileWriter } from '../utils/fs.js';
+import { checkoutRevision } from '../utils/git.js';
 import type { RunOutcome, VerificationObservation } from './observation.js';
 
 export interface TestCommand {
@@ -103,25 +104,14 @@ const runCommand = (
     timeoutMs: request.timeoutMs,
   });
 
-async function gitOrThrow(
+const resetToOriginal = (
   request: CounterfactualRequest,
   deps: CounterfactualDeps,
-  args: readonly string[],
-): Promise<void> {
-  const result = await runCommand(request, deps, 'git', args);
-  if (result.kind === 'timed_out' || result.exitCode !== 0) {
-    const detail = result.kind === 'completed' ? result.stderr.trim() : `timed out after ${result.timeoutMs}ms`;
-    throw new Error(`git ${args.join(' ')} failed in ${request.repoPath}: ${detail}`);
-  }
-}
-
-async function resetToOriginal(
-  request: CounterfactualRequest,
-  deps: CounterfactualDeps,
-): Promise<void> {
-  await gitOrThrow(request, deps, ['checkout', '--force', request.originalRevision]);
-  await gitOrThrow(request, deps, ['clean', '-fd']);
-}
+): Promise<void> =>
+  checkoutRevision(
+    { runner: deps.runner, repoPath: request.repoPath, env: request.env, timeoutMs: request.timeoutMs },
+    request.originalRevision,
+  );
 
 async function writeArtifacts(
   request: CounterfactualRequest,
