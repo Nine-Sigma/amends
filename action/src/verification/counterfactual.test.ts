@@ -12,11 +12,8 @@ import type { AmendsConfig } from '../config/types.js';
 import { createCommandRunner } from '../utils/exec.js';
 import type { CommandRequest } from '../utils/exec.js';
 import { createFileWriter } from '../utils/fs.js';
-import {
-  buildZeroSecretEnv,
-  runCounterfactual,
-  ZERO_SECRET_ENV_ALLOWLIST,
-} from './counterfactual.js';
+import { buildZeroSecretEnv, ZERO_SECRET_ENV_ALLOWLIST } from '../utils/env.js';
+import { runCounterfactual } from './counterfactual.js';
 import type { CounterfactualDeps, CounterfactualRequest } from './counterfactual.js';
 
 const INTEGRATION_TIMEOUT = 30_000;
@@ -298,18 +295,6 @@ describe('runCounterfactual', () => {
   });
 
   describe('zero-secret contract', () => {
-    it('buildZeroSecretEnv keeps only allowlisted keys, dropping everything secret-like', () => {
-      const env = buildZeroSecretEnv({
-        PATH: '/usr/bin',
-        HOME: '/home/user',
-        GITHUB_TOKEN: 'hostile',
-        AWS_SECRET_ACCESS_KEY: 'hostile',
-        NODE_OPTIONS: '--require=evil',
-      });
-
-      expect(Object.keys(env).sort()).toEqual(['HOME', 'PATH']);
-    });
-
     it(
       'the child process env contains nothing beyond the allowlist',
       async () => {

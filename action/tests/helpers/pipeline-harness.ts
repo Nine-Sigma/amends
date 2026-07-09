@@ -22,7 +22,7 @@ import { runVerifyStage } from '../../src/pipeline/verify.js';
 import { createCommandRunner } from '../../src/utils/exec.js';
 import type { CommandRequest, CommandRunner } from '../../src/utils/exec.js';
 import { createFileReader, createFileWriter } from '../../src/utils/fs.js';
-import { buildZeroSecretEnv } from '../../src/verification/counterfactual.js';
+import { buildZeroSecretEnv } from '../../src/utils/env.js';
 import type { FakeAdapterScenario } from './fake-adapter.js';
 import { stageScenarioAdapter } from './scenario-adapter.js';
 import { createTempGitRepo } from './temp-git.js';

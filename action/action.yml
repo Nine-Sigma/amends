@@ -57,6 +57,14 @@ inputs:
     description: 'Base branch for the fix pull request.'
     required: false
     default: 'main'
+  committer-name:
+    description: 'Committer/author name for the publish-stage fix commit.'
+    required: false
+    default: 'amends[bot]'
+  committer-email:
+    description: 'Committer/author email for the publish-stage fix commit.'
+    required: false
+    default: 'amends[bot]@users.noreply.github.com'
   timeout-ms:
     description: 'Per-command timeout in milliseconds.'
     required: false

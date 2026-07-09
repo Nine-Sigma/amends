@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFixStageEnv, FIX_STAGE_ENV_ALLOWLIST } from './env.js';
+import {
+  buildFixStageEnv,
+  buildPublishGitEnv,
+  buildZeroSecretEnv,
+  DEFAULT_COMMIT_IDENTITY,
+  FIX_STAGE_ENV_ALLOWLIST,
+} from './env.js';
 
 const hostileEnv = {
   PATH: '/usr/bin',
@@ -18,6 +24,39 @@ const hostileEnv = {
   GITHUB_WORKSPACE: '/workspace',
   undefined_value: undefined,
 };
+
+describe('buildZeroSecretEnv', () => {
+  it('keeps only allowlisted keys, dropping everything secret-like', () => {
+    const env = buildZeroSecretEnv(hostileEnv);
+
+    expect(Object.keys(env).sort()).toEqual(['HOME', 'PATH']);
+  });
+});
+
+describe('buildPublishGitEnv', () => {
+  it('adds all four git identity vars on top of the zero-secret base', () => {
+    const env = buildPublishGitEnv(hostileEnv, { name: 'amends[bot]', email: 'bot@example.invalid' });
+
+    expect(Object.keys(env).sort()).toEqual([
+      'GIT_AUTHOR_EMAIL',
+      'GIT_AUTHOR_NAME',
+      'GIT_COMMITTER_EMAIL',
+      'GIT_COMMITTER_NAME',
+      'HOME',
+      'PATH',
+    ]);
+    expect(env['GIT_AUTHOR_NAME']).toBe('amends[bot]');
+    expect(env['GIT_COMMITTER_EMAIL']).toBe('bot@example.invalid');
+    expect(env).not.toHaveProperty('GITHUB_TOKEN');
+  });
+
+  it('ships a noreply bot default identity', () => {
+    expect(DEFAULT_COMMIT_IDENTITY).toEqual({
+      name: 'amends[bot]',
+      email: 'amends[bot]@users.noreply.github.com',
+    });
+  });
+});
 
 describe('buildFixStageEnv', () => {
   it('keeps only the non-secret base allowlist when no secret keys are granted', () => {

@@ -91,6 +91,26 @@ describe('readActionInputs', () => {
     }
   });
 
+  it('defaults committer identity to the amends bot and honors overrides', () => {
+    const defaulted = readActionInputs(fixEnv());
+    expect(defaulted.ok).toBe(true);
+    if (defaulted.ok) {
+      expect(defaulted.inputs.committerName).toBe('amends[bot]');
+      expect(defaulted.inputs.committerEmail).toBe('amends[bot]@users.noreply.github.com');
+    }
+
+    const overridden = readActionInputs({
+      ...fixEnv(),
+      'INPUT_COMMITTER-NAME': 'release-bot',
+      'INPUT_COMMITTER-EMAIL': 'release-bot@example.com',
+    });
+    expect(overridden.ok).toBe(true);
+    if (overridden.ok) {
+      expect(overridden.inputs.committerName).toBe('release-bot');
+      expect(overridden.inputs.committerEmail).toBe('release-bot@example.com');
+    }
+  });
+
   it('rejects a non-numeric timeout-ms', () => {
     const result = readActionInputs({ ...fixEnv(), 'INPUT_TIMEOUT-MS': 'soon' });
     expect(result.ok).toBe(false);

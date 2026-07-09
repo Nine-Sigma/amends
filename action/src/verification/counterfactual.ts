@@ -59,19 +59,6 @@ export type CounterfactualVerdict =
   | { kind: 'guardrail_violation'; violation: GuardrailViolationDetail }
   | { kind: 'cap_exceeded'; fileCount: number; limit: number };
 
-export const ZERO_SECRET_ENV_ALLOWLIST: readonly string[] = ['PATH', 'HOME'];
-
-export const buildZeroSecretEnv = (
-  source: Readonly<Record<string, string | undefined>>,
-): Record<string, string> => {
-  const env: Record<string, string> = {};
-  for (const key of ZERO_SECRET_ENV_ALLOWLIST) {
-    const value = source[key];
-    if (value !== undefined) env[key] = value;
-  }
-  return env;
-};
-
 type Refusal = Extract<CounterfactualVerdict, { kind: 'guardrail_violation' | 'cap_exceeded' }>;
 
 function checkGuardrails(

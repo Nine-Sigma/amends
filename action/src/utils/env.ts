@@ -5,6 +5,48 @@
  * the explicit `adapter-secret-env` grant; GITHUB_TOKEN is never in the base.
  */
 
+export const ZERO_SECRET_ENV_ALLOWLIST: readonly string[] = ['PATH', 'HOME'];
+
+/** The verify stage's env: agent-authored tests see nothing beyond this (§8.1). */
+export const buildZeroSecretEnv = (
+  source: Readonly<Record<string, string | undefined>>,
+): Record<string, string> => {
+  const env: Record<string, string> = {};
+  for (const key of ZERO_SECRET_ENV_ALLOWLIST) {
+    const value = source[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
+};
+
+export interface CommitIdentity {
+  name: string;
+  email: string;
+}
+
+export const DEFAULT_COMMIT_IDENTITY: CommitIdentity = {
+  name: 'amends[bot]',
+  email: 'amends[bot]@users.noreply.github.com',
+};
+
+/**
+ * Publish-stage git env: zero-secret base plus an explicit committer identity
+ * (hosted runners auto-detect none; author-only still fails `git commit`).
+ * GITHUB_TOKEN stays out — `actions/checkout` persists push auth in the
+ * checkout's .git/config, so re-injecting it would weaken the boundary for
+ * nothing.
+ */
+export const buildPublishGitEnv = (
+  source: Readonly<Record<string, string | undefined>>,
+  identity: CommitIdentity,
+): Record<string, string> => ({
+  ...buildZeroSecretEnv(source),
+  GIT_AUTHOR_NAME: identity.name,
+  GIT_AUTHOR_EMAIL: identity.email,
+  GIT_COMMITTER_NAME: identity.name,
+  GIT_COMMITTER_EMAIL: identity.email,
+});
+
 export const FIX_STAGE_ENV_ALLOWLIST: readonly string[] = [
   'PATH',
   'HOME',

@@ -21,11 +21,15 @@ import { runFixStage } from './pipeline/fix.js';
 import { runPublishStage } from './pipeline/publish.js';
 import { summarizePipelineResult } from './pipeline/result.js';
 import { runVerifyStage } from './pipeline/verify.js';
-import { buildFixStageEnv } from './utils/env.js';
+import {
+  buildFixStageEnv,
+  buildPublishGitEnv,
+  buildZeroSecretEnv,
+  DEFAULT_COMMIT_IDENTITY,
+} from './utils/env.js';
 import { createCommandRunner } from './utils/exec.js';
 import { createFileReader, createFileWriter } from './utils/fs.js';
 import type { ParseError } from './utils/narrow.js';
-import { buildZeroSecretEnv } from './verification/counterfactual.js';
 
 type EnvMap = Readonly<Record<string, string | undefined>>;
 
@@ -46,6 +50,8 @@ export interface ActionInputs {
   model: string;
   base: string;
   checkoutPath: string;
+  committerName: string;
+  committerEmail: string;
   timeoutMs: number;
 }
 
@@ -112,6 +118,8 @@ export const readActionInputs = (env: EnvMap): ReadInputsResult => {
       model,
       base: input('base') ?? 'main',
       checkoutPath: workspace,
+      committerName: input('committer-name') ?? DEFAULT_COMMIT_IDENTITY.name,
+      committerEmail: input('committer-email') ?? DEFAULT_COMMIT_IDENTITY.email,
       timeoutMs,
     },
   };
@@ -231,7 +239,10 @@ const dispatchPublish = async (inputs: ActionInputs, env: EnvMap): Promise<Dispa
   if (owner === undefined || repo === undefined || repo === '') {
     throw new EntryFault(`GITHUB_REPOSITORY '${repoFull}' is not owner/repo`);
   }
-  const gitEnv = buildZeroSecretEnv(env);
+  const gitEnv = buildPublishGitEnv(env, {
+    name: inputs.committerName,
+    email: inputs.committerEmail,
+  });
   const github = createOctokitGitHubClient({
     octokit: new Octokit({ auth: requireEnv(env, 'GITHUB_TOKEN') }),
     runner: createCommandRunner(),
