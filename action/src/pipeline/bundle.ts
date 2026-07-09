@@ -10,6 +10,7 @@
 import { parseAdapterResult } from '../adapter/parse-result.js';
 import type { AdapterResult } from '../adapter/types.js';
 import type { AgentIdentity } from '../pr/compose-body.js';
+import { isCheckoutContainedPath } from '../utils/fs.js';
 import type { ParseError } from '../utils/narrow.js';
 import {
   isRecord,
@@ -47,6 +48,9 @@ const validateArtifactFiles = (parent: Record<string, unknown>, errors: ParseErr
   const files = requireRecord(parent, 'artifactFiles', 'artifactFiles', errors);
   if (files === undefined) return;
   for (const [path, content] of Object.entries(files)) {
+    if (!isCheckoutContainedPath(path)) {
+      errors.push({ path: `artifactFiles.${path}`, reason: 'artifact path must stay inside the checkout' });
+    }
     if (typeof content !== 'string') {
       errors.push({ path: `artifactFiles.${path}`, reason: missingOr(content, 'a string') });
     }

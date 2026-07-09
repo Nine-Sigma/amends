@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createFileReader, createFileWriter } from './fs.js';
+import { createFileReader, createFileWriter, isCheckoutContainedPath } from './fs.js';
 
 describe('createFileWriter', () => {
   let dir: string;
@@ -33,6 +33,26 @@ describe('createFileWriter', () => {
     await writer.write(target, 'second');
 
     expect(await readFile(target, 'utf8')).toBe('second');
+  });
+});
+
+describe('isCheckoutContainedPath', () => {
+  it.each([
+    'artifact.test.mjs',
+    'src/checkout/total.counterfactual.test.ts',
+    'a/./b.js',
+  ])('accepts the repo-relative path %s', (path) => {
+    expect(isCheckoutContainedPath(path)).toBe(true);
+  });
+
+  it.each([
+    '../escape.js',
+    '/etc/hook',
+    'a/../../escape.js',
+    '..',
+    'a/../..',
+  ])('rejects the escaping path %s', (path) => {
+    expect(isCheckoutContainedPath(path)).toBe(false);
   });
 });
 

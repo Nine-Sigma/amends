@@ -12,6 +12,7 @@ import { runAdapter } from '../adapter/run-adapter.js';
 import type { CaseFile } from '../case-file/types.js';
 import { assemblePrompt } from '../prompt/assemble.js';
 import type { CommandRunner } from '../utils/exec.js';
+import { isCheckoutContainedPath } from '../utils/fs.js';
 import type { FileReader, FileWriter } from '../utils/fs.js';
 import type { ParseError } from '../utils/narrow.js';
 import type { FixBundle } from './bundle.js';
@@ -48,7 +49,7 @@ const readDeclared = async (
   path: string,
 ): Promise<DeclaredRead> => {
   if (isAbsolute(path)) return { ok: false, reason: 'declared path must be repo-relative' };
-  if (path.split('/').includes('..')) {
+  if (!isCheckoutContainedPath(path)) {
     return { ok: false, reason: 'declared path must not escape the checkout' };
   }
   try {

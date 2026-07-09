@@ -50,6 +50,23 @@ describe('parseFixBundle', () => {
     }
   });
 
+  it.each([
+    { key: '../escape.js' },
+    { key: '/etc/hook' },
+    { key: 'a/../../escape.js' },
+  ])('rejects the traversal artifact key $key', ({ key }) => {
+    const bundle: Record<string, unknown> = roundTrip(validFixBundle()) as Record<string, unknown>;
+    bundle['artifactFiles'] = { [key]: '// content' };
+    const result = parseFixBundle(bundle);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual({
+        path: `artifactFiles.${key}`,
+        reason: 'artifact path must stay inside the checkout',
+      });
+    }
+  });
+
   it('rejects an adapter result missing its usage block at the prefixed path', () => {
     const bundle = roundTrip(validFixBundle()) as { adapterResult: Record<string, unknown> };
     delete bundle.adapterResult['usage'];
