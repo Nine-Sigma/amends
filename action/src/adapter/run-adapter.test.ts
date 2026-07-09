@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { runAdapter } from './run-adapter.js';
+import { ADAPTER_INPUT_ENV_VAR, runAdapter } from './run-adapter.js';
 import type { AdapterInvocation } from './run-adapter.js';
-import type { CommandRunner } from '../utils/exec.js';
+import type { CommandRequest, CommandRunner } from '../utils/exec.js';
 import {
   FAKE_ADAPTER_SCENARIOS,
   emitFakeAdapter,
@@ -15,6 +15,7 @@ const invocation = (): AdapterInvocation => ({
   input: {
     checkout_path: '/tmp/checkout',
     case_file_path: '/tmp/case-file.json',
+    prompt_path: '/runner/tmp/amends/prompt.md',
     model_config: { model: 'claude-sonnet-5' },
   },
   env: {},
@@ -63,8 +64,8 @@ describe('runAdapter', () => {
     expect(outcome.result.exit_code).toBe(0);
   });
 
-  it('runs in the checkout with the explicit env map and timeout', async () => {
-    const seen: unknown[] = [];
+  it('runs in the checkout with the explicit env map, timeout, and the serialized input transport', async () => {
+    const seen: CommandRequest[] = [];
     const runner: CommandRunner = {
       run: (request) => {
         seen.push(request);
@@ -79,15 +80,33 @@ describe('runAdapter', () => {
 
     await runAdapter(invocation(), runner);
 
-    expect(seen).toEqual([
-      {
-        command: 'fake-adapter',
-        args: ['--scenario', 'happy-tier1'],
-        cwd: '/tmp/checkout',
-        env: {},
-        timeoutMs: 5_000,
-      },
-    ]);
+    expect(seen).toHaveLength(1);
+    const request = seen[0];
+    if (request === undefined) throw new Error('unreachable');
+    expect(request.command).toBe('fake-adapter');
+    expect(request.args).toEqual(['--scenario', 'happy-tier1']);
+    expect(request.cwd).toBe('/tmp/checkout');
+    expect(request.timeoutMs).toBe(5_000);
+    expect(JSON.parse(request.env[ADAPTER_INPUT_ENV_VAR] ?? '')).toEqual(invocation().input);
+    expect(Object.keys(request.env)).toEqual([ADAPTER_INPUT_ENV_VAR]);
+  });
+
+  it('maps a spawn ENOENT (missing adapter executable) to a structured spawn_failed outcome', async () => {
+    const enoent = Object.assign(new Error('spawn fake-adapter ENOENT'), { code: 'ENOENT' });
+    const runner: CommandRunner = { run: () => Promise.reject(enoent) };
+
+    const outcome = await runAdapter(invocation(), runner);
+
+    expect(outcome.kind).toBe('spawn_failed');
+    if (outcome.kind !== 'spawn_failed') throw new Error('expected spawn_failed');
+    expect(outcome.detail).toContain('ENOENT');
+  });
+
+  it('still rejects on non-ENOENT runner faults — those are environment faults', async () => {
+    const fault = Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    const runner: CommandRunner = { run: () => Promise.reject(fault) };
+
+    await expect(runAdapter(invocation(), runner)).rejects.toThrow('EPERM');
   });
 
   it('reports non-zero exit as a distinct structured failure', async () => {

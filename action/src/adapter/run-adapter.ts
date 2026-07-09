@@ -18,25 +18,39 @@ export type RunAdapterOutcome =
   | { kind: 'nonzero_exit'; exitCode: number; stderr: string }
   | { kind: 'timeout'; timeoutMs: number }
   | { kind: 'malformed_json'; detail: string }
-  | { kind: 'nonconforming'; errors: ParseError[] };
+  | { kind: 'nonconforming'; errors: ParseError[] }
+  /** The adapter executable itself was not found — misconfiguration, reported typed, not an opaque crash. */
+  | { kind: 'spawn_failed'; detail: string };
+
+/** The delivery mechanism for AdapterInput: one env var holding its JSON serialization. */
+export const ADAPTER_INPUT_ENV_VAR = 'AMENDS_ADAPTER_INPUT';
+
+const isEnoent = (error: unknown): error is NodeJS.ErrnoException =>
+  error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
 
 /**
  * Spawns an adapter and narrows its stdout as untrusted result JSON. Every
  * failure mode is a distinct structured outcome; nothing throws for control
- * flow (a runner-level spawn error still rejects — that is an environment
- * fault, not adapter output).
+ * flow (a runner-level fault other than spawn-ENOENT still rejects — that is
+ * an environment fault, not adapter output).
  */
 export const runAdapter = async (
   invocation: AdapterInvocation,
   runner: CommandRunner,
 ): Promise<RunAdapterOutcome> => {
-  const outcome = await runner.run({
-    command: invocation.command,
-    args: invocation.args,
-    cwd: invocation.input.checkout_path,
-    env: invocation.env,
-    timeoutMs: invocation.timeoutMs,
-  });
+  let outcome;
+  try {
+    outcome = await runner.run({
+      command: invocation.command,
+      args: invocation.args,
+      cwd: invocation.input.checkout_path,
+      env: { ...invocation.env, [ADAPTER_INPUT_ENV_VAR]: JSON.stringify(invocation.input) },
+      timeoutMs: invocation.timeoutMs,
+    });
+  } catch (error) {
+    if (isEnoent(error)) return { kind: 'spawn_failed', detail: error.message };
+    throw error;
+  }
 
   if (outcome.kind === 'timed_out') {
     return { kind: 'timeout', timeoutMs: outcome.timeoutMs };

@@ -31,6 +31,7 @@ const PROMPT_CONTENT = '# Amends fix pass\n\nassembled prompt body';
 const adapterInput: AdapterInput = {
   checkout_path: CHECKOUT,
   case_file_path: '/tmp/case-file.json',
+  prompt_path: PROMPT_PATH,
   model_config: { model: 'claude-sonnet-5' },
 };
 

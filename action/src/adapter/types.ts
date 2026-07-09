@@ -5,12 +5,17 @@
  * in run-adapter.ts, never trusted typed.
  */
 
-/** What the fix stage hands an adapter before spawning it. */
+/**
+ * What the fix stage hands an adapter before spawning it. Delivered to the
+ * child serialized as JSON in the AMENDS_ADAPTER_INPUT env var (run-adapter.ts).
+ */
 export interface AdapterInput {
   /** Absolute path to the repo checkout at the resolved revision. */
   checkout_path: string;
   /** Absolute path to the case file the adapter must work from. */
   case_file_path: string;
+  /** Absolute path to the assembled fix-pass prompt — outside the checkout (1.4). */
+  prompt_path: string;
   model_config: ModelConfig;
 }
 

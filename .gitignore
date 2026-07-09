@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# The action ships its built bundle (standard for JS actions): rebuild + commit on release.
+!action/dist/
+!action/dist/**
 coverage/
 *.log
 .env

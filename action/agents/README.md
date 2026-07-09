@@ -17,9 +17,10 @@ The fix stage spawns the adapter via the configured `adapter-command` + `adapter
   agent-authored tests with zero secrets.
 - **timeout**: the run is killed after `timeout-ms`; a killed run is a structured
   `timeout` failure, not a crash.
-
-Anything the adapter needs beyond cwd/env (prompt path, case-file path, model) arrives
-through `adapter-args`, chosen by the user's workflow.
+- **`AMENDS_ADAPTER_INPUT`**: one env var holding the JSON-serialized `AdapterInput`
+  (`checkout_path`, `case_file_path`, `prompt_path`, `model_config`) — the canonical
+  delivery mechanism, set by `run-adapter.ts`. `adapter-args` remains a user escape
+  hatch for adapter-specific flags.
 
 ## Inputs
 
@@ -102,9 +103,15 @@ Structured outcomes: `ok`, `agent_failed` (nonzero CLI exit), `agent_timed_out`,
 `agent_reported_error` (CLI ran but reported failure, e.g. `error_max_turns`),
 `nonconforming_output` (stdout not a JSON result object), `no_changes`.
 
-Offline scope (US-012 skip rule): invocation construction, output mapping, and failure
-taxonomy are covered by tests against recorded CLI output shapes in `fixtures/`.
-Follow-up for a live environment: compile `agents/` into the shipped dist with a process
-entry that wires real deps (`createCommandRunner`/`createFileReader`/`createFileWriter`),
-prints the result JSON for `run-adapter.ts`, and verify end-to-end with model
-credentials.
+### Process entry (`cli.ts`)
+
+`claude-code-adapter` (the package `bin`, built to `dist/agents/cli.js`) reads the
+invocation from `AMENDS_ADAPTER_INPUT`, wires real deps
+(`createCommandRunner`/`createFileReader`/`createFileWriter`), and:
+
+- **exit 0**: the conformant result JSON on stdout (what `run-adapter.ts` parses);
+- **exit 1**: the structured non-ok outcome (or `invalid_adapter_input`) on stderr.
+
+A missing adapter executable surfaces as a typed `spawn_failed` outcome in the fix
+stage, never an opaque crash. Live end-to-end verification with model credentials
+remains environment work; everything up to the real `claude` spawn is covered by tests.

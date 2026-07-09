@@ -186,6 +186,7 @@ const dispatchFix = async (inputs: ActionInputs, env: EnvMap): Promise<DispatchO
         input: {
           checkout_path: inputs.checkoutPath,
           case_file_path: inputs.caseFilePath,
+          prompt_path: inputs.promptPath,
           model_config: { model: inputs.model },
         },
         // Model secrets reach the fix job only via the explicit adapter-secret-env grant (§8.1).

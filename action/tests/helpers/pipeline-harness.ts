@@ -135,6 +135,7 @@ const stageRunFix = async (
         input: {
           checkout_path: repo.repoPath,
           case_file_path: join(FIXTURES_DIR, 'node-api-500.json'),
+          prompt_path: join(outDir, 'prompt.md'),
           model_config: { model: 'fake-model' },
         },
         env: {},

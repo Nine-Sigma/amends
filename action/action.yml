@@ -9,8 +9,9 @@
 # provided by the workflow to the fix job alone; the verify stage runs
 # agent-authored tests under an explicit zero-secret env allowlist (§8.1).
 #
-# Packaging note: dist/index.js is the tsc build output; dependency bundling
-# for marketplace distribution is follow-up work.
+# Packaging: dist/index.js and dist/agents/cli.js are committed esbuild
+# bundles (dependencies inlined); prompts/ ships alongside dist/. Rebuild with
+# `pnpm build` and commit — CI fails on a stale dist.
 name: 'Amends'
 description: >-
   Turns a runtime-incident case file into an evidence-backed fix pull request:
@@ -42,7 +43,10 @@ inputs:
     required: false
     default: 'amends/prompt.md'
   adapter-command:
-    description: 'Agent adapter executable (Layer A, §3.4). Required for stage: fix.'
+    description: >-
+      Agent adapter executable (Layer A, §3.4). Required for stage: fix. The
+      adapter receives its AdapterInput (checkout, case-file and prompt paths,
+      model_config) as JSON in the AMENDS_ADAPTER_INPUT env var.
     required: false
   adapter-args:
     description: 'Whitespace-separated extra arguments for the adapter command.'
@@ -54,7 +58,10 @@ inputs:
       non-secret basics allowlist; GITHUB_TOKEN is never forwarded implicitly.
     required: false
   model:
-    description: 'Model identifier passed to the adapter as model_config.model. Required for stage: fix.'
+    description: >-
+      Model identifier, delivered to the adapter as model_config.model inside
+      the AMENDS_ADAPTER_INPUT JSON env var and recorded in PR-body audit
+      metadata. Required for stage: fix.
     required: false
   base:
     description: 'Base branch for the fix pull request.'

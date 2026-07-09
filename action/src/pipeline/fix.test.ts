@@ -55,6 +55,7 @@ describe('runFixStage', () => {
       input: {
         checkout_path: activeRepo.repoPath,
         case_file_path: 'unused-here.json',
+        prompt_path: join(outDir, 'prompt.md'),
         model_config: { model: 'fake-model' },
       },
       env: { PATH: process.env['PATH'] ?? '' },
@@ -91,7 +92,12 @@ describe('runFixStage', () => {
         invocation: {
           command: 'fake-adapter',
           args: [],
-          input: { checkout_path: '/unused', case_file_path: 'x.json', model_config: { model: 'm' } },
+          input: {
+            checkout_path: '/unused',
+            case_file_path: 'x.json',
+            prompt_path: '/unused/prompt.md',
+            model_config: { model: 'm' },
+          },
           env: {},
           timeoutMs: 1_000,
         },
