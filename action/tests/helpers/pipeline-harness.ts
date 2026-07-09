@@ -76,6 +76,32 @@ export const recordingRunner = (): { runner: CommandRunner; calls: CommandReques
   };
 };
 
+/** Real command execution with recorded calls — for tests that refuse mid-pipeline and must prove what actually ran. */
+export const recordingRealRunner = (): { runner: CommandRunner; calls: CommandRequest[] } => {
+  const real = createCommandRunner();
+  const calls: CommandRequest[] = [];
+  return {
+    calls,
+    runner: {
+      run: (request) => {
+        calls.push(request);
+        return real.run(request);
+      },
+    },
+  };
+};
+
+/** Path enumeration (`git apply --numstat/--summary`) legitimately precedes guardrail refusal; everything else must not. */
+export const nonEnumerationCalls = (calls: CommandRequest[]): CommandRequest[] =>
+  calls.filter(
+    (call) =>
+      !(
+        call.command === 'git' &&
+        call.args[0] === 'apply' &&
+        (call.args.includes('--numstat') || call.args.includes('--summary'))
+      ),
+  );
+
 export interface PipelineHarness {
   repo: TempGitRepo;
   outDir: string;

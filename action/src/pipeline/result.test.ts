@@ -7,6 +7,8 @@ import {
   bindCaseFileToRepo,
   createPipelineHarness,
   loadFixtureCaseFile,
+  nonEnumerationCalls,
+  recordingRealRunner,
   recordingRunner,
 } from '../../tests/helpers/pipeline-harness.js';
 import type { PipelineHarness } from '../../tests/helpers/pipeline-harness.js';
@@ -116,14 +118,15 @@ describe('gate-refusal paths (integration, in-process, no network)', () => {
     { timeout: INTEGRATION_TIMEOUT },
     async () => {
       const caseFile = await runnableCaseFile();
-      const verify = recordingRunner();
+      const verify = recordingRealRunner();
       const { result, github, publishCalls } = await drive(caseFile, 'touches-workflow', verify.runner);
 
-      expect(verify.calls).toHaveLength(0);
+      expect(nonEnumerationCalls(verify.calls)).toHaveLength(0);
       expect(result.kind).toBe('guardrail_violation');
-      if (result.kind === 'guardrail_violation') {
-        expect(result.violation.kind).toBe('hard_blocked');
+      if (result.kind === 'guardrail_violation' && result.violation.kind === 'hard_blocked') {
         expect(result.violation.paths).toContain('.github/workflows/release.yml');
+      } else {
+        throw new Error('expected a hard_blocked guardrail violation');
       }
       expect(publishCalls).toHaveLength(0);
       expectZeroGitHubWrites(github);
@@ -135,14 +138,15 @@ describe('gate-refusal paths (integration, in-process, no network)', () => {
     { timeout: INTEGRATION_TIMEOUT },
     async () => {
       const caseFile = await runnableCaseFile();
-      const verify = recordingRunner();
+      const verify = recordingRealRunner();
       const { result, github } = await drive(caseFile, 'touches-test-config', verify.runner);
 
-      expect(verify.calls).toHaveLength(0);
+      expect(nonEnumerationCalls(verify.calls)).toHaveLength(0);
       expect(result.kind).toBe('guardrail_violation');
-      if (result.kind === 'guardrail_violation') {
-        expect(result.violation.kind).toBe('invariance');
+      if (result.kind === 'guardrail_violation' && result.violation.kind === 'invariance') {
         expect(result.violation.paths).toContain('vitest.config.ts');
+      } else {
+        throw new Error('expected an invariance guardrail violation');
       }
       expectZeroGitHubWrites(github);
     },
@@ -153,10 +157,10 @@ describe('gate-refusal paths (integration, in-process, no network)', () => {
     { timeout: INTEGRATION_TIMEOUT },
     async () => {
       const caseFile = await runnableCaseFile();
-      const verify = recordingRunner();
+      const verify = recordingRealRunner();
       const { result, github } = await drive(caseFile, 'too-many-files', verify.runner);
 
-      expect(verify.calls).toHaveLength(0);
+      expect(nonEnumerationCalls(verify.calls)).toHaveLength(0);
       expect(result.kind).toBe('cap_exceeded');
       if (result.kind === 'cap_exceeded') {
         expect(result.fileCount).toBeGreaterThan(result.limit);
@@ -213,6 +217,7 @@ describe('summarizePipelineResult (exhaustive over the result union)', () => {
     { kind: 'fix_insufficient', reasons: ['artifact_failed_on_patched'], observation },
     { kind: 'guardrail_violation', violation: { kind: 'hard_blocked', paths: ['amends.yml'] } },
     { kind: 'guardrail_violation', violation: { kind: 'invariance', paths: ['tsconfig.json'] } },
+    { kind: 'guardrail_violation', violation: { kind: 'unenumerable_diff', reason: 'git apply --numstat failed' } },
     { kind: 'cap_exceeded', fileCount: 11, limit: 10 },
     { kind: 'release_unresolved', declared: 'api@2.1.0' },
   ];

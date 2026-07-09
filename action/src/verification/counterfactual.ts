@@ -1,8 +1,11 @@
 /**
  * Counterfactual verification orchestrator (§7.1): prove the artifact FAILS
  * on the original revision and PASSES on the patched revision, both runs
- * identical except the fix diff. Guardrails run BEFORE any execution or
- * write; every command runs under the caller-built zero-secret env (§8.1).
+ * identical except the fix diff. Guardrails run BEFORE any test execution or
+ * worktree write — the only thing preceding them is path enumeration, a
+ * read-only `git apply --numstat/--summary` parse plus the patch scratch
+ * write inside .git. Every command runs under the caller-built zero-secret
+ * env (§8.1).
  */
 
 import { join } from 'node:path';
@@ -10,12 +13,11 @@ import { join } from 'node:path';
 import type { AmendsConfig } from '../config/types.js';
 import { checkInvariance, VERIFICATION_CONFIG_SET } from '../guardrails/environment-invariance.js';
 import { classifyDiffPaths } from '../guardrails/protected-paths.js';
-import { applyFixDiff } from '../utils/apply-fix-diff.js';
+import { applyFixDiff, enumerateFixDiffPaths } from '../utils/apply-fix-diff.js';
 import type { ApplyFixDiffResult } from '../utils/apply-fix-diff.js';
 import { commandFailureSignature } from '../utils/exec.js';
 import type { CommandResult, CommandRunner } from '../utils/exec.js';
 import type { FileWriter } from '../utils/fs.js';
-import { parseFixDiffPaths } from './diff-paths.js';
 import type { RunOutcome, VerificationObservation } from './observation.js';
 
 export interface TestCommand {
@@ -45,7 +47,9 @@ export interface CounterfactualDeps {
 
 export type GuardrailViolationDetail =
   | { kind: 'hard_blocked'; paths: string[] }
-  | { kind: 'invariance'; paths: string[] };
+  | { kind: 'invariance'; paths: string[] }
+  /** The diff's touched paths could not be derived from git — refused, never treated as clear (§8.1). */
+  | { kind: 'unenumerable_diff'; reason: string };
 
 export type CounterfactualVerdict =
   | { kind: 'counterfactual'; observation: VerificationObservation }
@@ -194,9 +198,19 @@ export async function runCounterfactual(
   request: CounterfactualRequest,
   deps: CounterfactualDeps,
 ): Promise<CounterfactualVerdict> {
-  const fixPaths = parseFixDiffPaths(request.fixDiff);
+  const enumerated = await enumerateFixDiffPaths(
+    { repoPath: request.repoPath, fixDiff: request.fixDiff, env: request.env, timeoutMs: request.timeoutMs },
+    deps.runner,
+    deps.files,
+  );
+  if (!enumerated.ok) {
+    return {
+      kind: 'guardrail_violation',
+      violation: { kind: 'unenumerable_diff', reason: enumerated.reason },
+    };
+  }
   const artifactPaths = Object.keys(request.artifactFiles);
-  const refusal = checkGuardrails(fixPaths, artifactPaths, request.config);
+  const refusal = checkGuardrails(enumerated.paths, artifactPaths, request.config);
   if (refusal) return refusal;
 
   await resetToOriginal(request, deps);

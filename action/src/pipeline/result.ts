@@ -35,10 +35,18 @@ const assertNever = (value: never): never => {
   throw new Error(`unhandled pipeline result: ${JSON.stringify(value)}`);
 };
 
-const guardrailSummary = (violation: Extract<PipelineRefusal, { kind: 'guardrail_violation' }>['violation']): string =>
-  violation.kind === 'hard_blocked'
-    ? `fix diff touches hard-blocked paths: ${violation.paths.join(', ')}`
-    : `fix diff touches verification configuration: ${violation.paths.join(', ')}`;
+const guardrailSummary = (violation: Extract<PipelineRefusal, { kind: 'guardrail_violation' }>['violation']): string => {
+  switch (violation.kind) {
+    case 'hard_blocked':
+      return `fix diff touches hard-blocked paths: ${violation.paths.join(', ')}`;
+    case 'invariance':
+      return `fix diff touches verification configuration: ${violation.paths.join(', ')}`;
+    case 'unenumerable_diff':
+      return `fix diff paths could not be enumerated: ${violation.reason}`;
+    default:
+      return assertNever(violation);
+  }
+};
 
 /** The exhaustive switch is the compile-time proof that no result arm is unhandled. */
 export const summarizePipelineResult = (result: PipelineResult): string => {

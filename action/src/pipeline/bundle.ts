@@ -131,13 +131,18 @@ const validateGuardrailViolation = (
   const violation = requireRecord(verdict, 'violation', 'verdict.violation', errors);
   if (violation === undefined) return;
   const kind = violation['kind'];
-  if (kind !== 'hard_blocked' && kind !== 'invariance') {
-    errors.push({
-      path: 'verdict.violation.kind',
-      reason: missingOr(kind, "one of 'hard_blocked' | 'invariance'"),
-    });
+  if (kind === 'hard_blocked' || kind === 'invariance') {
+    requireStringArray(violation, 'paths', 'verdict.violation.paths', errors);
+    return;
   }
-  requireStringArray(violation, 'paths', 'verdict.violation.paths', errors);
+  if (kind === 'unenumerable_diff') {
+    requireString(violation, 'reason', 'verdict.violation.reason', errors);
+    return;
+  }
+  errors.push({
+    path: 'verdict.violation.kind',
+    reason: missingOr(kind, "one of 'hard_blocked' | 'invariance' | 'unenumerable_diff'"),
+  });
 };
 
 const validateVerdictArm = (verdict: Record<string, unknown>, errors: ParseError[]): void => {

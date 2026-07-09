@@ -46,7 +46,10 @@ const realDeps = (): CounterfactualDeps => ({
   files: createFileWriter(),
 });
 
-const recordingDeps = (): CounterfactualDeps & { runs: string[]; writes: string[] } => {
+/** Real runner/files with recorders, so refusal tests can prove what ran and what was written. */
+const spyingDeps = (): CounterfactualDeps & { runs: string[]; writes: string[] } => {
+  const runner = createCommandRunner();
+  const files = createFileWriter();
   const runs: string[] = [];
   const writes: string[] = [];
   return {
@@ -55,13 +58,13 @@ const recordingDeps = (): CounterfactualDeps & { runs: string[]; writes: string[
     runner: {
       run: (request: CommandRequest) => {
         runs.push(`${request.command} ${request.args.join(' ')}`);
-        return Promise.resolve({ kind: 'completed', exitCode: 0, stdout: '', stderr: '' } as const);
+        return runner.run(request);
       },
     },
     files: {
-      write: (absolutePath: string) => {
+      write: (absolutePath: string, content: string) => {
         writes.push(absolutePath);
-        return Promise.resolve();
+        return files.write(absolutePath, content);
       },
     },
   };
@@ -175,62 +178,123 @@ describe('runCounterfactual', () => {
     INTEGRATION_TIMEOUT,
   );
 
-  describe('guardrails run before any execution or write', () => {
-    const guardrailRequest = (fixDiff: string): CounterfactualRequest => ({
-      repoPath: '/unused/repo',
-      originalRevision: 'deadbeef',
+  describe('guardrails refuse before any test execution or worktree write', () => {
+    const guardrailRequest = (activeRepo: TempGitRepo, fixDiff: string): CounterfactualRequest => ({
+      ...requestFor(activeRepo, '// artifact'),
       fixDiff,
       artifactFiles: { 'src/checkout/total.counterfactual.test.ts': '// artifact' },
-      testCommand: { command: 'node', args: ['artifact.test.mjs'] },
-      runnerName: 'node',
-      env: {},
-      timeoutMs: 1_000,
-      config: defaultConfig(),
     });
 
-    it('a hard-blocked fix diff never executes any run and never writes a file', async () => {
-      const deps = recordingDeps();
+    /** Path enumeration alone may run (`git apply --numstat/--summary`) and write the .git-internal patch scratch. */
+    const expectNothingExecuted = (deps: { runs: string[]; writes: string[] }): void => {
+      for (const run of deps.runs) {
+        expect(run.startsWith('git apply --'), `unexpected command before refusal: ${run}`).toBe(true);
+      }
+      for (const write of deps.writes) {
+        expect(write.includes('/.git/'), `unexpected worktree write before refusal: ${write}`).toBe(true);
+      }
+    };
 
-      const verdict = await runCounterfactual(
-        guardrailRequest(emitFakeAdapter('touches-workflow').fixDiff),
-        deps,
-      );
+    it(
+      'a hard-blocked fix diff never executes a test run and never writes into the worktree',
+      async () => {
+        repo = await createTempGitRepo();
+        const deps = spyingDeps();
 
-      expect(verdict.kind).toBe('guardrail_violation');
-      if (verdict.kind !== 'guardrail_violation') return;
-      expect(verdict.violation.kind).toBe('hard_blocked');
-      expect(verdict.violation.paths).toContain('.github/workflows/release.yml');
-      expect(deps.runs).toEqual([]);
-      expect(deps.writes).toEqual([]);
-    });
+        const verdict = await runCounterfactual(
+          guardrailRequest(repo, emitFakeAdapter('touches-workflow').fixDiff),
+          deps,
+        );
 
-    it('a fix diff touching verification config is an invariance violation, executing nothing', async () => {
-      const deps = recordingDeps();
+        expect(verdict.kind).toBe('guardrail_violation');
+        if (verdict.kind !== 'guardrail_violation') return;
+        if (verdict.violation.kind !== 'hard_blocked') throw new Error('expected hard_blocked');
+        expect(verdict.violation.paths).toContain('.github/workflows/release.yml');
+        expectNothingExecuted(deps);
+      },
+      INTEGRATION_TIMEOUT,
+    );
 
-      const verdict = await runCounterfactual(
-        guardrailRequest(emitFakeAdapter('touches-test-config').fixDiff),
-        deps,
-      );
+    it(
+      'a header-less bare diff is judged by the path git apply will write, not by its (absent) header',
+      async () => {
+        repo = await createTempGitRepo();
+        const deps = spyingDeps();
+        const bareDiff = [
+          '--- a/src/total.js',
+          '+++ b/.github/workflows/evil.yml',
+          '@@ -1 +1 @@',
+          '-export const total = (items) => items.reduce((sum, item) => sum + item.price, 0);',
+          '+evil: true',
+          '',
+        ].join('\n');
 
-      expect(verdict.kind).toBe('guardrail_violation');
-      if (verdict.kind !== 'guardrail_violation') return;
-      expect(verdict.violation).toEqual({ kind: 'invariance', paths: ['vitest.config.ts'] });
-      expect(deps.runs).toEqual([]);
-      expect(deps.writes).toEqual([]);
-    });
+        const verdict = await runCounterfactual(guardrailRequest(repo, bareDiff), deps);
 
-    it('a fix diff exceeding limits.max_files_changed is cap_exceeded, executing nothing', async () => {
-      const deps = recordingDeps();
+        expect(verdict.kind).toBe('guardrail_violation');
+        if (verdict.kind !== 'guardrail_violation') return;
+        if (verdict.violation.kind !== 'hard_blocked') throw new Error('expected hard_blocked');
+        expect(verdict.violation.paths).toContain('.github/workflows/evil.yml');
+        expectNothingExecuted(deps);
+      },
+      INTEGRATION_TIMEOUT,
+    );
 
-      const verdict = await runCounterfactual(
-        guardrailRequest(emitFakeAdapter('too-many-files').fixDiff),
-        deps,
-      );
+    it(
+      'an unenumerable diff is refused closed, never treated as touching nothing',
+      async () => {
+        repo = await createTempGitRepo();
+        const deps = spyingDeps();
 
-      expect(verdict).toEqual({ kind: 'cap_exceeded', fileCount: 11, limit: 10 });
-      expect(deps.runs).toEqual([]);
-      expect(deps.writes).toEqual([]);
-    });
+        const verdict = await runCounterfactual(
+          guardrailRequest(repo, 'not a diff at all\njust noise\n'),
+          deps,
+        );
+
+        expect(verdict.kind).toBe('guardrail_violation');
+        if (verdict.kind !== 'guardrail_violation') return;
+        if (verdict.violation.kind !== 'unenumerable_diff') throw new Error('expected unenumerable_diff');
+        expect(verdict.violation.reason).not.toBe('');
+        expectNothingExecuted(deps);
+      },
+      INTEGRATION_TIMEOUT,
+    );
+
+    it(
+      'a fix diff touching verification config is an invariance violation, executing no test run',
+      async () => {
+        repo = await createTempGitRepo();
+        const deps = spyingDeps();
+
+        const verdict = await runCounterfactual(
+          guardrailRequest(repo, emitFakeAdapter('touches-test-config').fixDiff),
+          deps,
+        );
+
+        expect(verdict.kind).toBe('guardrail_violation');
+        if (verdict.kind !== 'guardrail_violation') return;
+        expect(verdict.violation).toEqual({ kind: 'invariance', paths: ['vitest.config.ts'] });
+        expectNothingExecuted(deps);
+      },
+      INTEGRATION_TIMEOUT,
+    );
+
+    it(
+      'a fix diff exceeding limits.max_files_changed is cap_exceeded, executing no test run',
+      async () => {
+        repo = await createTempGitRepo();
+        const deps = spyingDeps();
+
+        const verdict = await runCounterfactual(
+          guardrailRequest(repo, emitFakeAdapter('too-many-files').fixDiff),
+          deps,
+        );
+
+        expect(verdict).toEqual({ kind: 'cap_exceeded', fileCount: 11, limit: 10 });
+        expectNothingExecuted(deps);
+      },
+      INTEGRATION_TIMEOUT,
+    );
   });
 
   describe('zero-secret contract', () => {
