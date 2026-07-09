@@ -5,6 +5,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -108,7 +109,9 @@ export const readActionInputs = (env: EnvMap): ReadInputsResult => {
       configPath: inWorkspace(input('config-path') ?? 'amends.yml'),
       fixBundlePath: inWorkspace(input('fix-bundle') ?? 'amends-out/fix-bundle.json'),
       verifyBundlePath: inWorkspace(input('verify-bundle') ?? 'amends-out/verify-bundle.json'),
-      promptPath: inWorkspace(input('prompt-path') ?? 'amends-out/prompt.md'),
+      // Out of the worktree by construction, so the prompt (which embeds
+      // case-file content) can never be swept into the fix diff (1.4).
+      promptPath: resolve(env['RUNNER_TEMP'] ?? tmpdir(), input('prompt-path') ?? 'amends/prompt.md'),
       adapterCommand,
       adapterArgs: (input('adapter-args') ?? '').split(/\s+/).filter((arg) => arg !== ''),
       adapterSecretEnv: (input('adapter-secret-env') ?? '')

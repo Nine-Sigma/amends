@@ -35,9 +35,12 @@ inputs:
     required: false
     default: 'amends-out/verify-bundle.json'
   prompt-path:
-    description: 'Repo-relative path where the assembled fix-pass prompt is written for the adapter.'
+    description: >-
+      Where the assembled fix-pass prompt is written for the adapter. Relative
+      values resolve under RUNNER_TEMP — outside the checkout — so the prompt
+      can never pollute the fix diff.
     required: false
-    default: 'amends-out/prompt.md'
+    default: 'amends/prompt.md'
   adapter-command:
     description: 'Agent adapter executable (Layer A, §3.4). Required for stage: fix.'
     required: false

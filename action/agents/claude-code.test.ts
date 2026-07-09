@@ -1,9 +1,14 @@
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { createTempGitRepo } from '../tests/helpers/temp-git.js';
 import type { AdapterInput } from '../src/adapter/types.js';
+import { createCommandRunner } from '../src/utils/exec.js';
 import type { CommandRequest, CommandResult, CommandRunner } from '../src/utils/exec.js';
+import { createFileReader, createFileWriter } from '../src/utils/fs.js';
 import type { FileReader, FileWriter } from '../src/utils/fs.js';
 import {
   ADAPTER_SCRATCH_DIR,
@@ -225,6 +230,50 @@ describe('runClaudeCodeAdapter', () => {
     expect(outcome).toEqual({ kind: 'no_changes' });
     expect(deps.writes).toEqual([]);
   });
+
+  it(
+    'against a real repo: prompt written out-of-tree + no edits is no_changes, with real git status',
+    async () => {
+      const repo = await createTempGitRepo();
+      const promptDir = await mkdtemp(join(tmpdir(), 'amends-prompt-'));
+      try {
+        const promptPath = join(promptDir, 'prompt.md');
+        await writeFile(promptPath, PROMPT_CONTENT, 'utf8');
+        const realRunner = createCommandRunner();
+        const deps: ClaudeCodeDeps = {
+          runner: {
+            run: (request) =>
+              request.command === CLAUDE_CLI_COMMAND
+                ? Promise.resolve({
+                    kind: 'completed',
+                    exitCode: 0,
+                    stdout: fixture('claude-cli-success.json'),
+                    stderr: '',
+                  })
+                : realRunner.run(request),
+          },
+          reader: createFileReader(),
+          writer: createFileWriter(),
+        };
+
+        const outcome = await runClaudeCodeAdapter(
+          {
+            input: { ...adapterInput, checkout_path: repo.repoPath },
+            promptPath,
+            timeoutMs: 30_000,
+            env: { PATH: process.env['PATH'] ?? '' },
+          },
+          deps,
+        );
+
+        expect(outcome).toEqual({ kind: 'no_changes' });
+      } finally {
+        await repo.cleanup();
+        await rm(promptDir, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
 
   it('preserves usage_source unavailable from a usage-less claude result', async () => {
     const deps = scriptedDeps({

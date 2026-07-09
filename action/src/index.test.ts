@@ -20,7 +20,6 @@ describe('readActionInputs', () => {
       expect(result.inputs.configPath).toBe('/work/checkout/amends.yml');
       expect(result.inputs.fixBundlePath).toBe('/work/checkout/amends-out/fix-bundle.json');
       expect(result.inputs.verifyBundlePath).toBe('/work/checkout/amends-out/verify-bundle.json');
-      expect(result.inputs.promptPath).toBe('/work/checkout/amends-out/prompt.md');
       expect(result.inputs.base).toBe('main');
       expect(result.inputs.timeoutMs).toBe(600_000);
       expect(result.inputs.checkoutPath).toBe('/work/checkout');
@@ -88,6 +87,24 @@ describe('readActionInputs', () => {
     expect(without.ok).toBe(true);
     if (without.ok) {
       expect(without.inputs.adapterSecretEnv).toEqual([]);
+    }
+  });
+
+  it('keeps the prompt outside the worktree: resolved under RUNNER_TEMP, never the workspace', () => {
+    const result = readActionInputs({ ...fixEnv(), RUNNER_TEMP: '/runner/tmp' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.inputs.promptPath).toBe('/runner/tmp/amends/prompt.md');
+    }
+
+    const overridden = readActionInputs({
+      ...fixEnv(),
+      RUNNER_TEMP: '/runner/tmp',
+      'INPUT_PROMPT-PATH': 'custom/prompt.md',
+    });
+    expect(overridden.ok).toBe(true);
+    if (overridden.ok) {
+      expect(overridden.inputs.promptPath).toBe('/runner/tmp/custom/prompt.md');
     }
   });
 
